@@ -1,0 +1,21 @@
+Package: epimodFBAfunctionsGUI
+Version: 0.1.0
+Title:    Shiny GUI for epimodFBAfunctions
+Description: A Shiny front-end to build and run hybrid Petri net / FBA simulations via epimodFBAfunctions.
+Authors@R: 
+    person("Mandringo", 
+           role = c("aut", "cre"), 
+           email = "mandringo@example.com")
+License:  GPL-3
+Encoding: UTF-8
+Roxygen:  list(markdown = TRUE)
+RoxygenNote: 7.3.2
+Depends:
+    R (>= 4.0),
+    shiny,
+    epimodFBAfunctions,
+    epimod
+Imports:
+    yaml,
+    readr
+
