@@ -1,0 +1,88 @@
+/* --------  PAGE RESET  -------- */
+html, body { height: 100%; margin: 0; padding: 0; }
+
+/* --------  TOP HEADER  -------- */
+#topbar {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: 60px;
+  padding: 12px 20px;
+  background: #1A242F;       /* header colour */
+  color: #FFFFFF;
+  font-weight: 700;
+  font-size: 1.3em;
+  display: flex;
+  align-items: center;
+  z-index: 1000;
+}
+
+/* --------  VERTICAL NAV  ------ */
+/* navlistPanel builds a <ul class="nav nav-pills nav-stacked"> */
+.nav-pills.nav-stacked {
+  position: fixed;           /* fix under the header */
+  top: 60px;                 /* height of #topbar */
+  bottom: 0;
+  width: 16.6667%;           /* 2 out of 12 columns */
+  overflow-y: auto;          /* scroll if nav items overflow */
+  background: #2C3E50;       /* sidebar colour */
+  padding-top: 20px;
+}
+
+.nav-pills.nav-stacked > li > a {
+  margin-bottom: 12px; 
+  color: #FFFFFF;
+  font-weight: 600;
+}
+.nav-pills.nav-stacked > li.active > a,
+.nav-pills.nav-stacked > li > a:hover {
+  background: #1A242F;
+  color: #FFFFFF;
+}
+
+/* remove default padding so sidebar touches the left edge */
+.col-sm-2 { padding-left: 0; padding-right: 0; }
+
+/* --------  MAIN CONTENT  ------- */
+/* push content below header */
+.row { margin-top: 60px; }
+
+/* make the content column fill the rest and scroll */
+.row > .col-sm-10 {
+  position: absolute;
+  top: 60px;                 /* below header */
+  bottom: 0;
+  left: 16.6667%;            /* beside fixed sidebar */
+  right: 0;
+  overflow-y: auto;          /* vertical scroll for content */
+  padding: 20px;             /* match .card padding */
+  background: #f9f9f9;       /* optional background */
+}
+
+/* --------  CARD STYLING  -------- */
+.card {
+  background: #FFFFFF;
+  border: 1px solid #e2e2e2;
+  border-radius: 6px;
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 4px rgba(0,0,0,.05);
+}
+
+/* active file badge in sidebar */
+.file-active {
+  font-weight: 600;
+  color: #1A242F;
+}
+
+/* progress bar (very light grey track) */
+.progress { height: 8px; margin-top: 6px; }
+.progress-bar { background-color: #2C3E50; }
+
+/* TMP used in Model Generation */
+select { width: 100%; }
+
+/* --------  OPTIONAL SIZING FOR DT TABLES -------- */
+.dataTables_scrollBody {
+  max-height: 300px !important;  /* if you want internal scrollbars in DT */
+}
+

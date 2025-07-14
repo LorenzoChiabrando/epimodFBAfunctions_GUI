@@ -1,0 +1,24 @@
+/* remove default padding so sidebar touches the left edge */
+.col-sm-2 { 
+  padding-left: 0; 
+  padding-right: 0; 
+}
+
+/* --------  MAIN CONTENT  ------- */
+/* push content below header */
+.row { 
+  margin-top: 60px; 
+}
+
+/* make the content column fill the rest and scroll */
+.row > .col-sm-10 {
+  position: absolute;
+  top: 60px;                 /* below header */
+  bottom: 0;
+  left: 16.6667%;            /* beside fixed sidebar */
+  right: 0;
+  overflow-y: auto;          /* vertical scroll for content */
+  padding: 20px;             /* match .card padding */
+  background: #f9f9f9;       /* optional background */
+}
+

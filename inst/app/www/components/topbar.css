@@ -1,0 +1,15 @@
+/* --------  TOP HEADER  -------- */
+#topbar {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: 60px;
+  padding: 12px 20px;
+  background: #1A242F;       /* header colour */
+  color: #FFFFFF;
+  font-weight: 700;
+  font-size: 1.3em;
+  display: flex;
+  align-items: center;
+  z-index: 1000;
+}
+

@@ -1,16 +1,14 @@
 # inst/app/server.R
 library(shiny)
+library(shinyFiles)
+library(shinyjs)
+library(yaml)
 
-shinyServer(function(input, output, session) {
-  
-  output$histPlot <- renderPlot({
-    # draw input$n random normals and plot
-    x <- rnorm(input$n)
-    hist(x,
-         main  = paste("Histogram of", input$n, "random normals"),
-         xlab  = "Value",
-         breaks = 30)
-  })
-  
-})
+function(input, output, session) {
+
+  roots <- c(wd = ".")
+
+	modelGenServer("mg")
+
+}
 

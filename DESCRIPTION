@@ -13,9 +13,11 @@ RoxygenNote: 7.3.2
 Depends:
     R (>= 4.0),
     shiny,
-    epimodFBAfunctions,
-    epimod
 Imports:
     yaml,
-    readr
+    readr,
+    shinyFiles,
+    shinyjs,
+ 		htmltools,
+    DT
 
