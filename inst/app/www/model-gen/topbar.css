@@ -1,0 +1,61 @@
+/* --------  TOP HEADER  -------- */
+#topbar {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: 60px;
+  padding: 12px 20px;
+  background: #1A242F;       /* header colour */
+  color: #FFFFFF;
+  font-weight: 700;
+  font-size: 1.3em;
+  display: flex;
+  align-items: center;
+  z-index: 1000;
+}
+
+
+/* ── Topbar: split left/right, style GitHub & hamburger ── */
+#topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+#topbar .topbar-left img {
+  margin-right: 12px;
+}
+
+#topbar .topbar-right .fa {
+  font-size: 1.4em;
+  color: #fff;
+  cursor: pointer;
+}
+
+#topbar .btn-toggle-sidebar .fa {
+  font-size: 1.6em;
+  vertical-align: middle;
+}
+
+/* ── When sidebar is collapsed ── */
+body.sidebar-collapsed {
+  /* hide the 2-col nav */
+}
+body.sidebar-collapsed .col-sm-2 {
+  display: none !important;
+}
+/* let main content fill full width */
+body.sidebar-collapsed .row > .col-sm-10 {
+  left: 0 !important;
+  width: 100% !important;
+}
+
+/* ensure header still sits on top */
+body.sidebar-collapsed #topbar {
+  left: 0; right: 0;
+}
+
+/* remove left padding so content goes under header from very left */
+body.sidebar-collapsed .row {
+  margin-top: 60px;
+}
+

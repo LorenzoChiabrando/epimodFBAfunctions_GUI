@@ -28,3 +28,22 @@
   color: #1A242F;
 }
 
+
+/* ── Sidebar icons larger & white ── */
+.nav-pills.nav-stacked > li > a > .fa {
+  font-size: 1.2em;
+  margin-right: 8px;
+  color: #fff;
+}
+
+/* ── Collapse/hide sidebar when toggled ── */
+body.sidebar-collapsed .nav-pills.nav-stacked {
+  display: none !important;
+}
+
+/* ── Expand content area to full width when sidebar hidden ── */
+body.sidebar-collapsed .tab-content {
+  margin-left: 0 !important;
+  width: 100% !important;
+}
+

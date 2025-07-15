@@ -26,10 +26,13 @@ modelGenUI <- function(id) {
 modelGenServer <- function(id) {
   moduleServer(id, function(input, output, session) {
 
+
     ns <- session$ns
+
+    # ---- new reactive vals for step 1 inputs -----------------------
     hypernode_name <- shiny::reactiveVal(NULL)
     working_dir    <- shiny::reactiveVal(NULL)
-
+    matfile_dir    <- shiny::reactiveVal(NULL)
 
     # ---- 1) helper: blank config skeleton ---------------------------
     empty_cfg <- function(fp) {
@@ -44,86 +47,185 @@ modelGenServer <- function(id) {
       )
     }
 
-    # ---- 2) reactive state ------------------------------------------
+    # ---- 2) reactive state for downstream modules -------------------
     unit_cfgs  <- shiny::reactiveVal(list())
     current    <- shiny::reactiveVal(1)
     meta_cache <- shiny::reactiveVal(list())
-				
-		# ---- A) Global settings state ------------------------------------
-		global_cfg <- shiny::reactiveVal(list(
-			biomass      = list(max = 1,   mean = 1,   min = 0),
-			population   = list(starv = 0, dup = 1, death = 0),
-			volume       = 0.001,
-			cell_density = 1e10,
-			initial_count  = 1e6
-		))
 
+    global_cfg <- shiny::reactiveVal(list(
+      biomass      = list(max = 1, mean = 1, min = 0),
+      population   = list(starv = 0, dup = 1, death = 0),
+      volume       = 0.001,
+      cell_density = 1e10,
+      initial_count= 1e6
+    ))
 
-    # ---- 3) folder chooser (shinyFiles) ------------------------------
-    roots <- c(home = "~", wd = ".")
-    
+    # ---- 3) folder choosers (shinyFiles) ----------------------------
+    roots <- c(Home = "~", `R Project` = ".")
+    shinyFiles::shinyDirChoose(
+      input, id = "work_dir", roots = roots,
+      defaultRoot = "R Project", defaultPath = "."
+    )
     shinyFiles::shinyDirChoose(
       input, id = "mat_dir", roots = roots,
-      defaultRoot = "wd", defaultPath = "."
+      defaultRoot = "R Project", defaultPath = "."
     )
-    selected_dir <- shiny::reactiveVal(NULL)
 
-    shiny::observeEvent(input$mat_dir, {
-      sel <- shinyFiles::parseDirPath(roots, input$mat_dir)
-      if (length(sel)==0 || !dir.exists(sel)) return()
+		# ---- 4) top‐card UI: step 1 --------------------------------------
+		output$top_card <- renderUI({
+			# only show step1 when no models loaded yet
+			if (length(unit_cfgs()) == 0) {
+				# parse current paths
+				wd_path <- shinyFiles::parseDirPath(roots, input$work_dir)
+				md_path <- shinyFiles::parseDirPath(roots, input$mat_dir)
 
-      selected_dir(sel)
-      shiny::withProgress(message="Generating metadata…", value=0, {
-        epimodFBAfunctions::generate_metadata(
-          sel, overwrite=TRUE,
-          progress=function(i,total) shiny::incProgress(1/total)
-        )
-      })
+				div(class = "sim-card directory",
 
-      paths <- list.files(sel, "\\.mat$", full.names=TRUE)
-      if (length(paths)==0) {
-        shiny::showNotification("No .mat files found in selected folder", type="error")
-        return()
-      }
+				  # Section title
+				  h5(icon("folder-open"), "Step 1 – Initialize Hypernode", class = "sim-section-title"),
 
-      meta <- list()
-      for (p in paths) {
-        mn <- tools::file_path_sans_ext(basename(p))
-        md <- file.path(sel, mn)
-        files <- c(
-          meta = file.path(md, "metabolites_metadata.csv"),
-          rxn  = file.path(md, "reactions_metadata.csv"),
-          bnd  = file.path(md, "boundary_metabolites.csv")
-        )
-        miss <- names(files)[!file.exists(files)]
-        if (length(miss)>0) next
+				  # Hypernode name input
+				  div(class = "mt-3",
+				    textInput(
+				      ns("hypernode_name"),
+				      "Hypernode Name",
+				      placeholder = "Enter unique name for this run",
+				      width = "100%"
+				    )
+				  ),
 
-        meta[[mn]] <- list(
-          meta = readr::read_csv(files["meta"], show_col_types=FALSE),
-          rxn  = readr::read_csv(files["rxn"],  show_col_types=FALSE),
-          bnd  = readr::read_csv(files["bnd"],  show_col_types=FALSE)
-        )
-      }
-      meta_cache(meta)
-      unit_cfgs(lapply(paths, empty_cfg))
-      current(1)
-    })
+				  # Working Directory selector
+				  if (length(wd_path) == 0 || !nzchar(wd_path)) {
+				    div(class = "sim-dir-selector mt-4",
+				      shinyFiles::shinyDirButton(
+				        id    = ns("work_dir"),
+				        label = "Browse Working Directory…",
+				        title = "Choose folder where outputs will be saved",
+				        icon  = icon("folder"),
+				        class = "btn-sim-dir"
+				      )
+				    )
+				  } else {
+				    div(class = "selected-dir mt-4",
+				      strong("Working Dir:"), 
+				      span(basename(wd_path), class = "badge bg-primary text-white ms-2")
+				    )
+				  },
 
-		# ---- 4) top card: folder chooser only ----------------------------
-		output$top_card <- shiny::renderUI({
-			cfgs <- unit_cfgs()
-			if (length(cfgs) == 0) {
-				shiny::div(class = "card",
-				  shiny::h4("1) Select folder with MAT models"),
-				  shinyFiles::shinyDirButton(
-				    ns("mat_dir"), "Browse folder", "Choose a directory",
-				    icon = shiny::icon("folder-open")
+				  # MAT‐file Directory selector
+				  if (length(md_path) == 0 || !nzchar(md_path)) {
+				    div(class = "sim-dir-selector mt-4",
+				      shinyFiles::shinyDirButton(
+				        id    = ns("mat_dir"),
+				        label = "Browse MAT-file Directory…",
+				        title = "Choose folder containing your .mat models",
+				        icon  = icon("folder-open"),
+				        class = "btn-sim-dir"
+				      )
+				    )
+				  } else {
+				    div(class = "selected-dir mt-4",
+				      strong("MAT‐file Dir:"), 
+				      span(basename(md_path), class = "badge bg-primary text-white ms-2")
+				    )
+				  },
+
+				  # Load Models button (primary color)
+				  div(class = "text-center mt-4",
+				    actionButton(
+				      ns("btn_step1"),
+				      "Load Models",
+				      icon  = icon("play"),
+				      class = "btn-primary px-5"
+				    )
 				  )
 				)
 			} else {
 				NULL
 			}
 		})
+
+    # ---- 5) show selected paths -------------------------------------
+    output$work_dir_path <- renderText({
+      p <- shinyFiles::parseDirPath(roots, input$work_dir)
+      if (length(p)==1 && nzchar(p) && dir.exists(p)) p else ""
+    })
+    output$mat_dir_path <- renderText({
+      p <- shinyFiles::parseDirPath(roots, input$mat_dir)
+      if (length(p)==1 && nzchar(p) && dir.exists(p)) p else ""
+    })
+
+    # ---- 6) on clicking Load Models, run your old metadata logic ----
+observeEvent(input$btn_step1, {
+  # 1) store step1 inputs
+  hypernode_name(input$hypernode_name)
+  wd  <- shinyFiles::parseDirPath(roots, input$work_dir)
+  matd <- shinyFiles::parseDirPath(roots, input$mat_dir)
+  shiny::req(length(wd)==1, nzchar(wd), dir.exists(wd))
+  shiny::req(length(matd)==1, nzchar(matd), dir.exists(matd))
+  working_dir(wd)
+  matfile_dir(matd)
+
+  # 2) ensure config/ exists under working_dir
+  cfg_dir <- file.path(working_dir(), "config")
+  if (!dir.exists(cfg_dir)) dir.create(cfg_dir, recursive=TRUE)
+
+  # 3) generate metadata CSVs under sel/<model_name>/
+  withProgress(message="Generating metadata…", value=0, {
+    epimodFBAfunctions::generate_metadata(
+      matfile_dir(), overwrite=TRUE,
+      progress=function(i, total) shiny::incProgress(1/total)
+    )
+  })
+
+  # 4) find all .mat files in sel
+  paths <- list.files(matfile_dir(), "\\.mat$", full.names=TRUE)
+  if (length(paths)==0) {
+    shiny::showNotification("Nessun file .mat trovato", type="error")
+    return()
+  }
+
+  # 5) per ciascun modello copia cartella metadata → config/ e poi la rimuove
+  model_names <- tools::file_path_sans_ext(basename(paths))
+  for (mn in model_names) {
+    src  <- file.path(matfile_dir(), mn)
+    dest <- file.path(cfg_dir, mn)
+    if (!dir.exists(src)) next
+    if (!dir.exists(dest)) dir.create(dest, recursive=TRUE)
+
+    # copia tutto tranne .mat (che sta in matfile_dir, non nella sottocartella)
+    files_to_copy <- list.files(src, full.names=TRUE, all.files=TRUE)
+    file.copy(files_to_copy, dest, recursive=TRUE, overwrite=TRUE)
+
+    # elimina la cartella metadata originale
+    unlink(src, recursive=TRUE, force=TRUE)
+  }
+
+  # 6) leggi metadata da config/
+  meta <- list()
+  for (mn in model_names) {
+    md    <- file.path(cfg_dir, mn)
+    files <- c(
+      meta = file.path(md, "metabolites_metadata.csv"),
+      rxn  = file.path(md, "reactions_metadata.csv"),
+      bnd  = file.path(md, "boundary_metabolites.csv")
+    )
+    if (all(file.exists(files))) {
+      meta[[mn]] <- list(
+        meta = readr::read_csv(files["meta"], show_col_types=FALSE),
+        rxn  = readr::read_csv(files["rxn"],  show_col_types=FALSE),
+        bnd  = readr::read_csv(files["bnd"],  show_col_types=FALSE)
+      )
+    }
+  }
+
+  # 7) inizializza reactive values
+  meta_cache(meta)
+  unit_cfgs(lapply(paths, empty_cfg))
+  current(1)
+})
+
+
 
 
     # ---- 5) aggregate ALL boundary metabolites -----------------------
@@ -149,7 +251,7 @@ modelGenServer <- function(id) {
 			mc   <- meta_cache()
 
 			if (length(cfgs) == 0) {
-				return(h4("Choose a folder with .mat files to begin."))
+				return(h4(""))
 			}
 
 			# Models as plain table with actionLinks
@@ -172,7 +274,7 @@ modelGenServer <- function(id) {
 			)
 
 		# • GLOBAL Community Settings accordion (closed by default)
-		global_settings_card <- tags$details(class = "card mb-4",
+		 global_settings_card <- tags$details(class = "card mb-4 modelgen-global",
 			tags$summary(
 				class = "card-header d-flex align-items-center justify-content-between",
 				style = "cursor: pointer;",
@@ -292,7 +394,7 @@ modelGenServer <- function(id) {
 			# Export YAML card
 			export_card <- div(class = "card", style = "margin-bottom:20px;",
 				h4("Export Configuration"),
-				actionButton(ns("btn_generate"), "Generate YAML"),
+				actionButton(ns("btn_generate"), "Generate Model", class = "btn-success"),
 				verbatimTextOutput(ns("cfg_yaml"))
 			)
 
@@ -441,31 +543,111 @@ modelGenServer <- function(id) {
 			))
 		})
 
-		# ---- C‴) YAML gen: live-read per-model inputs with global fallbacks ----
+# ---- C‴) YAML gen: live-read per-model inputs with global fallbacks AND write to disk ----
+# ---- C‴) YAML gen: live-read per-model inputs + write to disk + FBA gen ----
 		observeEvent(input$btn_generate, {
-			# gather inputs
+			# 1) gather inputs for YAML
 			bounds <- all_boundaries()[ input$tbl_boundaries_rows_selected, "metabolite_id" ]
 			inputs <- reactiveValuesToList(input)
 
-			# try to build; capacity‐overrun will throw
+			# 2) build the YAML text
 			yaml_txt <- tryCatch({
-				build_hypernode_yaml(
-				  unit_cfgs(), 
-				  global_cfg(), 
-				  inputs, 
-				  bounds
-				)
+				build_hypernode_yaml(unit_cfgs(), global_cfg(), inputs, bounds)
 			}, error = function(e) {
-				showModal(modalDialog(
-				  title = "Error Generating YAML",
-				  e$message, easyClose = TRUE
-				))
+				showModal(modalDialog(title = "Error Generating YAML", e$message, easyClose = TRUE))
 				return(NULL)
 			})
-			if (!is.null(yaml_txt)) {
-				output$cfg_yaml <- renderText(yaml_txt)
-			}
-		})
+			if (is.null(yaml_txt)) return()
+
+			# 3) preview YAML in-app
+			output$cfg_yaml <- renderText(paste(yaml_txt, collapse = "\n"))
+
+			# 4) write YAML & build hypernode directory
+			out_paths  <- write_hypernode_yaml(yaml_txt, working_dir(), hypernode_name())
+			config_dir <- dirname(out_paths$yaml)
+			bc_json    <- file.path(config_dir, "boundary_conditions.json")
+			writeBoundaryConditionsStatic(output_json = bc_json)
+
+			withProgress(message = "Building hypernode…", value = 0, {
+				epimodFBAfunctions::build_hypernodeGUI(
+				  hypernode_name           = hypernode_name(),
+				  config_yaml              = out_paths$yaml,
+				  boundary_conditions_file = bc_json,
+				  initial_data             = file.path(config_dir, "initial_data.csv"),
+				  mat_dir                  = config_dir,
+				  base_dir                 = working_dir(),
+				  overwrite                = TRUE
+				)
+				incProgress(1)
+			})
+
+			# 5) determine the true hypernode root
+			cand1 <- file.path(working_dir(),          hypernode_name())
+			cand2 <- file.path(working_dir(), "hypernodes", hypernode_name())
+			hyper_base <- if (dir.exists(cand2)) cand2 else cand1
+
+			# ── DEBUG: which one we use
+			message("[DEBUG] trying cand1: ", cand1)
+			message("[DEBUG] trying cand2: ", cand2)
+			message("[DEBUG] using hyper_base: ", hyper_base)
+
+			petri_net_dir <- file.path(hyper_base, "petri_net")
+			src_dir       <- file.path(hyper_base, "src")
+			biounits_dir  <- file.path(hyper_base, "biounits")
+			gen_dir       <- file.path(hyper_base, "gen")
+
+			# ── DEBUG: print subfolders
+			message("[DEBUG] petri_net_dir:  ", petri_net_dir)
+			message("[DEBUG] src_dir:        ", src_dir)
+			message("[DEBUG] biounits_dir:   ", biounits_dir)
+			message("[DEBUG] gen_dir:        ", gen_dir)
+
+			# 6) locate files
+			net_file   <- list.files(petri_net_dir, pattern = "\\.PNPRO$", full.names = TRUE)
+			trans_file <- list.files(src_dir,       pattern = "\\.cpp$",   full.names = TRUE)[1]
+			fba_files  <- list.files(biounits_dir,  pattern = "\\.txt$",   full.names = TRUE, recursive = TRUE)
+
+			# ── DEBUG: list found files
+			message("[DEBUG] net_file:   ", paste(net_file, collapse = ", "))
+			message("[DEBUG] trans_file: ", trans_file)
+			message("[DEBUG] fba_files:  ",
+				      if (length(fba_files)) paste(head(fba_files, 10), collapse = ", ") else "none")
+
+			# 7) run FBA model generation
+			withProgress(message = "Generating FBA models…", value = 0, {
+				epimodFBAfunctions::model_generation_GUI(
+				  net_fname         = net_file,
+				  transitions_fname = trans_file,
+				  fba_fname         = fba_files,
+				  output_dir        = gen_dir
+				)
+				incProgress(1)
+			})
+			showNotification("Model generation complete", type = "message")
+
+			# 8) cleanup config folder if desired
+			if (fs::dir_exists(config_dir)) fs::dir_delete(config_dir)
+
+			# 9) final success modal
+			showModal(modalDialog(
+				title   = "🎉 Model Generated!",
+				HTML(paste0(
+				  "<p>The hypernode has been created at:<br><code>", hyper_base, "</code></p>",
+				  "<p>FBA models are in:<br><code>", gen_dir, "</code></p>"
+				)),
+				easyClose = FALSE,
+				footer    = modalButton("Close")
+			))
+
+			# 10) reset module back to step 1
+			hypernode_name(NULL)
+			working_dir(NULL)
+			matfile_dir(NULL)
+			unit_cfgs(list())
+			meta_cache(list())
+			current(1)
+		}, ignoreInit = TRUE)
+
 
 
 			

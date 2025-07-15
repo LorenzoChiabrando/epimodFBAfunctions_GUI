@@ -1,0 +1,209 @@
+/* ── Main simulation container ── */
+.sim-card {
+  background: #fff;
+  border-radius: 8px;
+  padding: 2rem;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  margin: 1rem;
+}
+
+/* ── Directory selector ── */
+.sim-dir-selector {
+  background: #f0faff;
+  border-left: 6px solid #3498db;    /* blue accent */
+  border: 1px solid #dceff8;
+  border-radius: 6px;
+  padding: 1rem;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* ── Models list card ── */
+.sim-section-card.models {
+  background: #f7fff0;
+  border-left: 6px solid #27ae60;    /* green accent */
+}
+
+/* ── Simulation config card ── */
+.sim-section-card.config {
+  background: #fffaf0;
+  border-left: 6px solid #f1c40f;    /* gold accent */
+}
+
+/* Common section card styling */
+.sim-section-card {
+  border: 1px solid #e1e5ea;
+  border-radius: 6px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+/* Section titles */
+.sim-section-title {
+  font-size: 1.25rem;
+  color: #34495e;
+  margin-bottom: 1rem;
+}
+
+/* ── Buttons ── */
+.btn-sim-dir {
+  background: #2980b9;
+  color: #fff;
+  border: none;
+  font-size: 1rem;
+  padding: 0.6rem 1.2rem;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+.btn-sim-dir:hover {
+  background: #2178a8;
+}
+.btn-run-sim {
+  background: #e67e22;
+  color: #fff;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  width: 100%;
+  border-radius: 4px;
+  font-size: 1.05rem;
+  transition: background 0.2s;
+}
+.btn-run-sim:hover {
+  background: #cf711c;
+}
+.btn-reset-sim .fa-redo {
+  font-size: 1.2em;
+  color: #2980b9;
+}
+
+/* ── Tables ── */
+.sim-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.sim-table th,
+.sim-table td {
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid #e1e5ea;
+}
+
+/* ── Invalid-directory modal ── */
+.modal-sim-invalid .modal-content {
+  border-radius: 8px;
+  padding: 1.5rem;
+  font-family: sans-serif;
+}
+.modal-sim-invalid .modal-header {
+  background: #c0392b;
+  color: #fff;
+  border-top-left-radius: 8px;
+  border-top-right-radius: 8px;
+}
+.modal-sim-invalid .modal-body {
+  color: #2c3e50;
+}
+.modal-sim-invalid .modal-footer .btn {
+  background: #bdc3c7;
+  color: #2c3e50;
+}
+
+
+/* ── Numeric inputs in Simulation ── */
+.sim-section-card.config input[type="number"] {
+  width: 100%;
+  background: #f7fbfd;                   /* very light blue tint */
+  border: 1px solid #aed6f1;             /* matching accent */
+  border-radius: 4px;
+  padding: 0.5rem 0.75rem;
+  font-size: 1rem;
+  color: #2c3e50;
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.05);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+/* Focus state */
+.sim-section-card.config input[type="number"]:focus {
+  border-color: #2980b9;
+  box-shadow: 0 0 0 0.2rem rgba(41,128,185,0.25);
+  outline: none;
+}
+
+/* Remove default spinner buttons in WebKit */
+.sim-section-card.config input[type="number"]::-webkit-outer-spin-button,
+.sim-section-card.config input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Remove spinner in Firefox */
+.sim-section-card.config input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+/* ── Section title refinement ── */
+.sim-section-title {
+  font-size: 1.5rem;           /* bump up size */
+  font-weight: 700;            /* heavier weight */
+  color: #1A242F;              /* darker for contrast */
+  text-transform: uppercase;   /* all-caps for headers */
+  letter-spacing: 0.5px;       /* slight tracking */
+  margin-bottom: 1.25rem;      /* extra breathing room */
+  position: relative;
+}
+.sim-section-title::after {
+  content: "";
+  display: block;
+  width: 60px;
+  height: 3px;
+  background: #2980b9;         /* accent bar */
+  margin-top: 0.5rem;
+  border-radius: 2px;
+}
+
+/* ── Compact numeric inputs ── */
+.sim-section-card.config input[type="number"] {
+  height: 2rem;                /* shorter fields */
+  font-size: 1.4rem;           /* slightly smaller text */
+  padding: 0.3rem 0.6rem;      /* tighter padding */
+  border-radius: 4px;          /* pill-like corners */
+}
+
+/* adjust width if needed (already 100%) */
+.sim-section-card.config input[type="number"] { width: 60%; } 
+
+/* add 1.5rem of space between each section in the sim-card */
+.sim-card > * + * {
+  margin-top: 4rem;
+}
+/* Increase base font size for the entire card */
+.sim-card {
+  font-size: 1.525rem;          /* ~18px if root is 16px */
+}
+
+/* Section titles (h5) */
+.sim-card h5.sim-section-title {
+  font-size: 2rem;            /* ~24px */
+  line-height: 1.7rem;
+}
+
+/* Directory badge and labels */
+.sim-card .selected-dir,
+.sim-card .dir-name,
+.sim-card .badge {
+  font-size: 1.625rem;          /* ~18px */
+}
+
+/* Inputs and buttons */
+.sim-card input,
+.sim-card .btn {
+  font-size: 1.5rem;              /* ~16px */
+}
+
+/* Table text */
+.sim-card table th,
+.sim-card table td {
+  font-size: 1.5rem;              /* ~16px */
+}
+
+

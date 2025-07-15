@@ -1,0 +1,79 @@
+/* inst/app/www/home-css/home.css */
+
+#home-page {
+  background: #f0f0f0;
+  padding: 4rem 2rem;
+  display: flex;
+  justify-content: center;
+}
+
+#home-page .home-container {
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+  padding: 3rem;
+  max-width: 1000px;
+  width: 100%;
+}
+
+#home-page .home-main-card {
+  background: transparent;
+  padding-bottom: 2rem;
+  border-bottom: 1px solid #e0e0e0;
+  text-align: center;
+}
+
+#home-page .home-logo {
+  max-width: 450px;
+  width: 100%;
+  height: auto;
+  margin-bottom: 1.5rem;
+}
+
+#home-page .home-title {
+  font-size: 3.75rem;
+  margin-bottom: 0.5rem;
+  color: #2c3e50;
+}
+
+#home-page .home-subtitle {
+  font-size: 1.5rem;
+  color: #555555;
+  margin: 0;
+}
+
+#home-page .home-cards {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 1.5rem;
+  margin-top: 2rem;
+}
+
+#home-page .home-card {
+  flex: 1 1 calc(50% - 1rem);
+  background: #f7f7f7;
+  border-radius: 8px;
+  padding: 1.75rem;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+}
+
+#home-page .home-card-title {
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+  color: #34495e;
+}
+
+#home-page .home-card-text {
+  font-size: 1.25rem;
+  color: #666666;
+  margin: 0;
+}
+
+#home-page .home-footer {
+  text-align: center;
+  margin-top: 3rem;
+  font-size: 1.2rem;
+  color: #777777;
+}
+

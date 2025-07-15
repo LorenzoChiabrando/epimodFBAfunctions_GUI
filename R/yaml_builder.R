@@ -68,3 +68,44 @@ build_hypernode_yaml <- function(unit_cfgs, global_cfg, inputs, all_bounds) {
   yaml::as.yaml(full, indent.mapping.sequence = TRUE)
 }
 
+
+#' Write a Hypernode YAML to disk
+#'
+#' @param yaml_txt   A character string containing the YAML.
+#' @param out_dir    Path to the working directory.
+#' @param hypernode  Name of the hypernode (used as filename prefix).
+#' @return           The full path to the file that was written.
+#' @throws           Error if `out_dir` does not exist or `hypernode` is empty.
+#' @export
+write_hypernode_yaml <- function(yaml_txt, out_dir, hypernode) {
+  if (!dir.exists(out_dir)) {
+    stop("Working directory not found: ", out_dir)
+  }
+  if (!nzchar(hypernode)) {
+    stop("Hypernode name cannot be empty")
+  }
+
+  # ensure config/ subfolder exists
+  config_dir <- file.path(out_dir, "config")
+  if (!dir.exists(config_dir)) {
+    dir.create(config_dir, recursive = TRUE, showWarnings = FALSE)
+  }
+
+  # 1) write the YAML
+  yaml_fname <- paste0(hypernode, ".yaml")
+  yaml_path  <- file.path(config_dir, yaml_fname)
+  writeLines(yaml_txt, yaml_path)
+
+  # 2) write the placeholder initial_data.csv
+  csv_path <- file.path(config_dir, "initial_data.csv")
+  # single header line, semicolon-delimited
+  writeLines("i; init; init.gen;", csv_path)
+
+  return(list(
+    yaml = yaml_path,
+    initial_data = csv_path
+  ))
+}
+
+
+
