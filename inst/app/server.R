@@ -4,6 +4,12 @@ library(shinyFiles)
 library(shinyjs)
 library(yaml)
 
+
+project_root <- getOption(
+  "epimodFBAfunctionsGUI.user_proj",
+  normalizePath("~")
+)
+
 function(input, output, session) {
   roots <- c(wd = ".")
 
@@ -11,6 +17,8 @@ function(input, output, session) {
   homeServer("home")
   modelGenServer("mg")
   simulationServer("sim")
+  sensitivityServer("sen")
+  calibrationServer("cal")
   dataVisServer("dv")
   minMicrobiomeServer("mm")
 
@@ -35,7 +43,7 @@ function(input, output, session) {
   observeEvent(input$`sim-btn_visualize`, {
     updateNavlistPanel(session, "main_nav", selected = "Data Visualization")
     # Click the dv plot button after a short delay
-    runjs('setTimeout(function(){ $("#dv-btn_plot").click(); }, 100);')
+    runjs('setTimeout(function(){ $("#dv-btn_plot").click(); }, 200);')
   })
 
 

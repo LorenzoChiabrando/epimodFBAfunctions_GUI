@@ -1,4 +1,5 @@
 # UI for Data Visualization
+#' @export
 dataVisUI <- function(id) {
   ns <- NS(id)
   tabPanel(
@@ -51,13 +52,19 @@ dataVisUI <- function(id) {
 }
 
 # Server for Data Visualization
+#' @export
 dataVisServer <- function(id) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
     # set up shinyFiles
-    roots <- c(home = ".")
-    shinyDirChoose(input, "hypernode_dir", roots = roots, session = session)
+		project_root <- getOption("epimodFBAfunctionsGUI.user_proj",
+				                      normalizePath("~"))
+    roots <- c(
+      Home    = "~",   # your real home folder
+      Project = project_root    # your RStudio project directory
+    )
+    shinyDirChoose(input, "hypernode_dir", roots = roots, session = session, defaultRoot = "Project")
 
     # Display chosen or fallback path
     output$dir_path <- renderText({

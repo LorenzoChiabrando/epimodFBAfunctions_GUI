@@ -1,0 +1,106 @@
+/* ── Hypernode Directory Card Enhancements ── */
+.sim-section-card.directory {
+  /* keep the existing background & borders */
+  background: #f0faff;
+  
+  border-radius: 6px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+   border: 1px solid #3498db;
+  /* bump up the overall font-size for this card */
+  font-size: 1.25rem;  
+   border-left: 6px solid #3498db;
+}
+
+/* make the folder icon + title text black */
+.sim-section-card.directory .sim-section-title {
+  color: #000 !important;
+}
+.sim-section-card.directory .sim-section-title .fa-folder-open {
+  color: #000 !important;
+}
+
+/* increase section title size further, if desired */
+.sim-section-card.directory .sim-section-title {
+  font-size: 1.75rem;
+  line-height: 1.2;
+}
+
+/* “Current:” badge row – larger & black text */
+.sim-section-card.directory .selected-dir {
+  background: #ffffff;
+  padding: 0.75rem 1rem;
+  border-radius: 4px;
+  /*border: 1px solid #e1e5ea;*/
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+
+  /* increase text size & force black */
+  font-size: 1.25rem;
+  color: #000;
+}
+
+/* the “Current:” label */
+.sim-section-card.directory .selected-dir strong {
+  color: #000;
+  font-weight: 700;
+}
+
+/* the badge text */
+.sim-section-card.directory .selected-dir .badge {
+  font-size: 1.25rem;
+  background: #3498db;   /* keep existing color or adjust */
+  color: #fff;
+}
+
+
+/* ── Bigger Browse Button ── */
+.btn-sim-dir {
+  font-size: 7.25rem;             /* bump up text */
+  padding: 1rem 1.5rem;           /* more click area */
+  border-radius: 6px;             /* slightly rounder */
+  background: #2980b9;            /* keep the blue */
+  color: #fff;
+  border: none;
+  box-shadow: 0 3px 6px rgba(0,0,0,0.1);
+  transition: background 0.2s, transform 0.1s;
+}
+.btn-sim-dir:hover {
+  background: #2178a8;
+  transform: translateY(-1px);
+}
+
+/* ── Big, Graphic Reset Button ── */
+.btn-reset-sim {
+  font-size: 1.25rem;
+  padding: 1rem 1.25rem;
+  min-width: 3rem;
+  border-radius: 30px;            /* pill shape */
+  background: linear-gradient(135deg, #e74c3c, #c0392b);
+  color: #fff;
+  border: none;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+  transition: background 0.3s, transform 0.1s, box-shadow 0.2s;
+}
+.btn-reset-sim .fa-redo {
+  margin-right: 0.5rem;           /* space before the icon */
+}
+.btn-reset-sim:hover {
+  background: linear-gradient(135deg, #c0392b, #a93226);
+  transform: scale(1.05);
+  box-shadow: 0 6px 12px rgba(0,0,0,0.2);
+}
+
+
+/* add an accent bar under the directory card title */
+.sim-section-card.directory .sim-section-title::after {
+  content: "";
+  display: block;
+  width: 60px;                   /* match your models section width */
+  height: 3px;
+  background: #3498db;           /* same blue accent */
+  margin-top: 0.5rem;
+  border-radius: 2px;
+}
+

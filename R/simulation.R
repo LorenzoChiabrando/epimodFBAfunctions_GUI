@@ -4,6 +4,7 @@
 #'
 #' @param id Module namespace id
 #' @return A tabPanel for hypernode selection and simulation configuration
+#' @export
 simulationUI <- function(id) {
   ns <- shiny::NS(id)
   shiny::tabPanel(
@@ -26,23 +27,113 @@ simulationUI <- function(id) {
 #'
 #' @param id Module namespace id
 #' @return Server logic for hypernode selection and simulation config
+#' @export
 simulationServer <- function(id) {
   shiny::moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
+
+		project_root <- getOption("epimodFBAfunctionsGUI.user_proj",
+				                      normalizePath("~"))
+		                        
     # Setup for directory chooser
-    roots <- c(home = ".")
+    # Setup for directory chooser: allow both your Home and your R-project
+    roots <- c(
+      Home    = "~",   # your real home folder
+      Project = project_root    # your RStudio project directory
+    )
     shinyFiles::shinyDirChoose(
-      input   = input,
-      id      = "hypernode_dir",
-      roots   = roots,
-      session = session
+      input       = input,
+      id          = "hypernode_dir",    # must exactly match the UI’s id
+      roots       = roots,
+      session     = session,
+      defaultRoot = "Project",           
+      defaultPath = ""                  # start at top of that root
     )
 
     # Reactive flags
     dir_valid  <- shiny::reactiveVal(FALSE)
     models     <- shiny::reactiveVal(character())
     reset_flag <- shiny::reactiveVal(FALSE)
+    session_files <- reactiveValues(proj = NULL, nproj = NULL)
+    
+	    # ──────────────────────────────────────────────────────────────────────
+    # ①  CACHE PER-MODEL DATA 
+    # ──────────────────────────────────────────────────────────────────────
+    node_data <- reactiveVal(list())
+
+    # —————————————————————————————————————————————————————————————
+    #  rebuild node_data + create GUI-temp bounds files on valid dir
+    # —————————————————————————————————————————————————————————————
+    observeEvent(dir_valid(), ignoreInit = TRUE, {
+      req(dir_valid())
+
+      base_dir <- shinyFiles::parseDirPath(roots, input$hypernode_dir)
+      cfg_dir  <- file.path(base_dir, "config")
+      out_dir  <- file.path(base_dir, "output")
+
+      # ----- create / overwrite temp copies ---------------------------
+      session_files$proj <- file.path(out_dir, "ub_bounds_projected_gui.csv")
+      session_files$nproj<- file.path(out_dir, "ub_bounds_not_projected_gui.csv")
+
+      file.copy(file.path(out_dir, "ub_bounds_projected.csv"),
+                session_files$proj,  overwrite = TRUE)
+      file.copy(file.path(out_dir, "ub_bounds_not_projected.csv"),
+                session_files$nproj, overwrite = TRUE)
+
+      # ----- YAML ------------------------------------------------------
+      yml_file <- list.files(cfg_dir, "\\.ya?ml$", full.names = TRUE)[1]
+      yml      <- if (length(yml_file)) yaml::read_yaml(yml_file) else NULL
+
+      yaml_tbl <- if (!is.null(yml$cellular_units)) {
+        do.call(rbind, lapply(yml$cellular_units, function(u)
+          data.frame(
+            model      = u$model_name,
+            bioMax     = u$biomass$max,
+            bioMean    = u$biomass$mean,
+            bioMin     = u$biomass$min,
+            starv      = u$population$starv,
+            dup        = u$population$dup,
+            death      = u$population$death,
+            population = u$initial_count,
+            stringsAsFactors = FALSE
+          )))
+      } else data.frame()
+
+      # ----- read the TEMP bounds files -------------------------------
+      proj_df  <- if (file.exists(session_files$proj))
+                    read.csv(session_files$proj,  stringsAsFactors = FALSE) else data.frame()
+      nproj_df <- if (file.exists(session_files$nproj))
+                    read.csv(session_files$nproj, stringsAsFactors = FALSE) else data.frame()
+
+      make_bounds <- function(df, mdl) {
+        if (!nrow(df)) return(data.frame(reaction=character(),lower=numeric(),upper=numeric()))
+        sub <- df[df$FBAmodel == mdl, , drop = FALSE]
+        if (!nrow(sub)) return(data.frame(reaction=character(),lower=numeric(),upper=numeric()))
+        sub$dir      <- ifelse(grepl("_r$", sub$reaction), "lower", "upper")
+        sub$reaction <- sub("_[rf]$", "", sub$reaction)
+        lower <- aggregate(upper_bound ~ reaction, sub[sub$dir=="lower",], `[`, 1)
+        upper <- aggregate(upper_bound ~ reaction, sub[sub$dir=="upper",], `[`, 1)
+        names(lower)[2] <- "lower"; names(upper)[2] <- "upper"
+        merge(lower, upper, all = TRUE)
+      }
+
+      info_list <- lapply(models(), function(mdl) {
+        row    <- yaml_tbl[yaml_tbl$model == mdl, , drop = FALSE]
+        params <- if (nrow(row)) as.list(row[1, c("bioMax","bioMean","bioMin","starv","dup","death")]) else
+                  as.list(setNames(rep(NA,6), c("bioMax","bioMean","bioMin","starv","dup","death")))
+        list(
+          params      = params,
+          population  = if (nrow(row)) row$population[1] else NA,
+          projected   = make_bounds(proj_df , mdl),
+          unprojected = make_bounds(nproj_df, mdl)
+        )
+      })
+      names(info_list) <- models()
+      node_data(info_list)
+    })
+
+
 
     # Observe directory selection
     shiny::observeEvent(input$hypernode_dir, {
@@ -75,6 +166,8 @@ simulationServer <- function(id) {
     # Reset handler
     shiny::observeEvent(input$btn_reset, {
       reset_flag(TRUE)
+      unlink(c(session_files$proj, session_files$nproj), force = TRUE)
+      session_files$proj <- session_files$nproj <- NULL
       dir_valid(FALSE)
       models(character())
     })
@@ -108,16 +201,16 @@ simulationServer <- function(id) {
 			} else {
 				reset_flag(FALSE)
 				div(class = "sim-section-card directory",
-				  h5(icon("folder-open"), "Choose Hypernode Directory", class = "sim-section-title"),
-				  div(class = "sim-dir-selector mt-3",
-				    shinyFiles::shinyDirButton(
-				      id    = ns("hypernode_dir"),
-				      label = "Browse…",
-				      title = "Choose hypernode folder",
-				      icon  = icon("folder-open"),
-				      class = "btn-sim-dir"
-				    )
-				  )
+				  h5(icon("folder-open"), "Choose Hypernode Directory For Model Analysis Simulation", class = "sim-section-title"),
+						div(class = "sim-dir-selector mt-3",
+							shinyFiles::shinyDirButton(
+								id    = ns("hypernode_dir"),
+								label = "Browse…",
+								title = "Choose hypernode folder",
+								icon  = icon("folder-open"),
+								class = "btn btn-primary btn-sim-dir shinyDirButton"
+							)
+						)
 				)
 			}
 		})
@@ -126,46 +219,29 @@ simulationServer <- function(id) {
 		# Model list UI
 		output$model_list <- renderUI({
 			if (dir_valid()) {
-				div(class = "sim-section-card models",
-				  # Header styled like Simulation Configuration
+				div(
+				  id    = ns("sim_models_section"),
+				  class = "sim-section-card models",
+
+				  # Header
 				  h5(icon("cubes"), "Models", class = "sim-section-title"),
 
-				  # Scrollable list
-				  div(class = "sim-model-list",
-				    tags$table(class = "table sim-table",
-				      tags$thead(
-				        tags$tr(tags$th("Model"))
-				      ),
-				      tags$tbody(
-				        lapply(models(), function(m) {
-				          tags$tr(
-				            tags$td(
-				              actionLink(ns(paste0("model_", m)), m)
-				            )
-				          )
-				        })
+				  # Scrollable list-group
+				  div(
+				    id    = ns("sim_model_list"),
+				    class = "sim-model-list list-group",
+				    lapply(models(), function(m) {
+				      actionLink(
+				        inputId = ns(paste0("model_", m)),
+				        label   = tagList(icon("cube"), span(m, class = "model-label")),
+				        class   = "list-group-item list-group-item-action model-link"
 				      )
-				    )
+				    })
 				  )
 				)
 			}
 		})
 
-    # Model click modals
-    shiny::observe({
-      req(models())
-      lapply(seq_along(models()), function(i) {
-        id_link <- paste0("model_", i)
-        shiny::observeEvent(input[[id_link]], {
-          shiny::showModal(shiny::modalDialog(
-            title = paste0("Model: ", models()[i]),
-            shiny::p("Temporary message for ", models()[i]),
-            easyClose = TRUE,
-            footer = shiny::modalButton("Close")
-          ))
-        }, ignoreInit = TRUE)
-      })
-    })
 
 		# Simulation configuration inputs & Run handler
 		output$sim_controls <- renderUI({
@@ -232,8 +308,6 @@ simulationServer <- function(id) {
 				)
 			}
 		})
-
-
 
 		shiny::observeEvent(input$btn_run_sim, {
 			# ── 1) Set up paths ───────────────────────────────────────────────────────
@@ -303,11 +377,145 @@ simulationServer <- function(id) {
 			)
 			  session$userData$last_hypernode <- shinyFiles::parseDirPath(roots, input$hypernode_dir)
 		})
+		
+   # ── modals for each bacteria ─────────────────────────────────────────
+		observe({
+			req(dir_valid())
+			lapply(models(), function(m) {
+				observeEvent(input[[paste0("model_", m)]], ignoreInit = TRUE, {
+
+				  ## ── pull cached data ───────────────────────────────────────────
+				  info  <- node_data()[[m]]
+				  params <- info$params
+				  proj   <- info$projected
+				  unproj <- info$unprojected
+				  pop    <- info$population
+
+				  ## ── build modal ────────────────────────────────────────────────
+				  showModal(
+				    modalDialog(
+				      title     = paste("Model:", m),
+				      size      = "l",
+				      easyClose = FALSE,         # force use of footer buttons
+				      tagList(
+				        fluidRow(
+				          column(6,
+				                 h4("Parameter Recap"),
+				                 tableOutput(ns("modal_param_table"))
+				          ),
+				          column(6,
+				                 h4("Initial Population"),
+				                 verbatimTextOutput(ns("modal_pop"))
+				          )
+				        ),
+				        hr(),
+				        h4("Exchange Reaction Bounds"),
+				        tabsetPanel(
+				          tabPanel("Projected",
+				            div(style = "max-height:350px; overflow-y:auto;",
+				                DT::dataTableOutput(ns("modal_proj_table"))
+				            )
+				          ),
+				          tabPanel("Not projected",
+				            div(style = "max-height:350px; overflow-y:auto;",
+				                DT::dataTableOutput(ns("modal_unproj_table"))
+				            )
+				          )
+				        )
+				      ),
+				      footer = tagList(
+				        modalButton("Close"),
+				        actionButton(ns("modal_save"), "Save Changes", class = "btn-primary")
+				      ),
+				      class = "modal-model"
+				    )
+				  )
+
+				  ## ── renderers ──────────────────────────────────────────────────
+				  output$modal_param_table <- renderTable({
+				    data.frame(Parameter = c("bioMax","bioMean","bioMin","starv","dup","death"),
+				               Value     = unlist(params, use.names = FALSE),
+				               stringsAsFactors = FALSE)
+				  }, striped = TRUE, hover = TRUE, spacing = "s")
+
+				  output$modal_pop <- renderText(pop)
+
+				  ## ----  DT helpers  --------------------------------------------
+				  opts <- list(
+				    dom            = "ft",
+				    paging         = FALSE,
+				    ordering       = FALSE,
+				    scrollY        = 300,
+				    scrollCollapse = TRUE
+				  )
+				  lock_first <- list(target = "cell", disable = list(columns = c(0)))
+
+				  output$modal_proj_table <- DT::renderDataTable({
+				    DT::datatable(proj,  rownames = FALSE,
+				                  editable = lock_first,
+				                  options  = opts)
+				  })
+				  output$modal_unproj_table <- DT::renderDataTable({
+				    DT::datatable(unproj, rownames = FALSE,
+				                  editable = lock_first,
+				                  options  = opts)
+				  })
+
+				  ## ── listen for cell edits (keep node_data up-to-date) ──────────
+				  proj_proxy   <- DT::dataTableProxy(ns("modal_proj_table"))
+				  unproj_proxy <- DT::dataTableProxy(ns("modal_unproj_table"))
+				  
+				  # --- projected edits -------------------------------------------
+				  observeEvent(input$modal_proj_table_cell_edit, ignoreInit = TRUE, {
+				    edit <- input$modal_proj_table_cell_edit
+				    proj[edit$row, edit$col + 1] <<- as.numeric(edit$value)
+				    info$projected <- proj
+				    tmp <- node_data(); tmp[[m]] <- info; node_data(tmp)
+
+				    DT::replaceData(proj_proxy, proj, resetPaging = FALSE, rownames = FALSE)
+				    write.csv(proj, session_files$proj, row.names = FALSE)   #  ⬅️  flush to temp
+				  })
+
+				  # --- unprojected edits -----------------------------------------
+				  observeEvent(input$modal_unproj_table_cell_edit, ignoreInit = TRUE, {
+				    edit <- input$modal_unproj_table_cell_edit
+				    unproj[edit$row, edit$col + 1] <<- as.numeric(edit$value)
+				    info$unprojected <- unproj
+				    tmp <- node_data(); tmp[[m]] <- info; node_data(tmp)
+
+				    DT::replaceData(unproj_proxy, unproj, resetPaging = FALSE, rownames = FALSE)
+				    write.csv(unproj, session_files$nproj, row.names = FALSE) #  ⬅️  flush to temp
+				  })
+
+     			 # save button: commit temp to originals, close modal, toast
+				  observeEvent(input$modal_save, {
+				    base_dir <- shinyFiles::parseDirPath(roots, input$hypernode_dir)
+				    out_dir  <- file.path(base_dir, "output")
+
+				    file.copy(session_files$proj,
+				              file.path(out_dir, "ub_bounds_projected.csv"),
+				              overwrite = TRUE)
+				    file.copy(session_files$nproj,
+				              file.path(out_dir, "ub_bounds_not_projected.csv"),
+				              overwrite = TRUE)
+
+				    removeModal()
+				    shiny::showNotification(
+				      paste("Bounds for", m, "saved to disk."),
+				      type = "message", duration = 3
+				    )
+				  }, ignoreInit = TRUE)
+
+				})
+			})
+		})
+
+
 
 		# ── 5) Handle modal choices ────────────────────────────────────────────────
 		# Visualize Results
 
- rootSess <- session
+ 		rootSess <- session
     while (!is.null(rootSess$parent)) rootSess <- rootSess$parent
 
     # 1) Visualize Results

@@ -1,0 +1,25 @@
+/* ── Directory Selector Card ── */
+.sim-dir-selector {
+  background: #f0faff;
+  border: 1px solid #dceff8;
+  border-radius: 6px;
+  padding: 2rem;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* “Select Directory” button in the selector */
+.btn-sim-dir {
+  background: #2980b9;
+  color: #fff;
+  border: none;
+  font-size: 1.5rem;
+  padding: 1rem 2rem;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+.btn-sim-dir:hover {
+  background: #2178a8;
+}
+

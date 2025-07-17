@@ -1,0 +1,60 @@
+/* ── Modal for Model Details (green theme) ── */
+.modal-model .modal-content {
+  background: #f0fff4;                /* very light green */
+  border-left: 6px solid #27ae60;     /* green accent */
+  border-radius: 8px;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.1);
+  overflow: hidden;
+}
+
+.modal-model .modal-header {
+  background: #27ae60;
+  color: #fff;
+  border-bottom: none;
+  padding: 1rem 1.5rem;
+}
+
+.modal-model .modal-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.modal-model .modal-body {
+  padding: 1.5rem;
+  color: #1A242F;
+}
+
+.modal-model .modal-body h4 {
+  margin-top: 0;
+  color: #27ae60;
+  border-bottom: 2px solid #27ae60;
+  padding-bottom: 0.25rem;
+}
+
+.modal-model .modal-body table,
+.modal-model .modal-body .dataTables_wrapper {
+  margin-top: 1rem;
+}
+
+.modal-model .modal-body table th,
+.modal-model .modal-body table td {
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid #e1e5ea;
+}
+
+.modal-model .modal-footer {
+  background: #ffffff;
+  border-top: none;
+  padding: 1rem 1.5rem;
+}
+
+.modal-model .modal-footer .btn-primary {
+  background: #27ae60;
+  border-color: #219150;
+}
+
+.modal-model .modal-footer .btn {
+  min-width: 100px;
+  margin-left: 0.5rem;
+}
+
