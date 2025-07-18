@@ -61,23 +61,21 @@ conda install -c conda-forge cobra
 
 1. Donwload epimodFBAfunctionsGUI :
    
-   ```
-   	install_github(
+```
+  install_github(
   "https://github.com/LorenzoChiabrando/epimodFBAfunctions_GUI",
   ref = "main"
-   
-   ```
+```
 
 
 
 
 2. In R (console or Rstudio), launch the Shiny app:
 
-   ```
+```
    library(epimodFBAfunctionsGUI)
    epimodFBAfunctionsGUI::run_app()
-
-	```
+```
 
 3. Use the sidebar to navigate:
    - **Model Generation**: Configure and export FBA model hypernodes.
