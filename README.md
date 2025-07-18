@@ -64,7 +64,7 @@ conda install -c conda-forge cobra
 ```
   install_github(
   "https://github.com/LorenzoChiabrando/epimodFBAfunctions_GUI",
-  ref = "main"
+  ref = "main")
 ```
 
 
