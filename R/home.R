@@ -13,7 +13,7 @@ homeUI <- function(id) {
         # logo + title card
         div(class = "home-main-card",
             tags$img(
-              src   = "Logo_QBio.png",
+              src   = "./Logo_QBio.png",
               alt   = "QBIO Logo",
               class = "home-logo"
             ),

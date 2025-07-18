@@ -77,6 +77,8 @@ dashboardPage(
       tags$link(rel = "stylesheet", type = "text/css", href = "model-gen/boundary-met.css"),
 
       tags$link(rel = "stylesheet", type = "text/css", href = "home-css/home.css"),
+      tags$link(rel = "stylesheet", type = "text/css", href = "home-css/home-main.css"),
+      tags$link(rel = "stylesheet", type = "text/css", href = "home-css/home-cards.css"),
       tags$link(rel = "stylesheet", type = "text/css", href = "home-css/tutorial.css"),
       
       

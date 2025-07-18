@@ -52,9 +52,13 @@ Install using pip or conda:
 ```bash
 # Using pip
 pip install cobra
+python3 -m pip install --user cobra
 
 # Or with conda
 conda install -c conda-forge cobra
+
+# Only if in Rstudio gives error (missing cobra library)
+sudo python3 -m pip install cobra       # global (only if the others don't works)
 ```
 
 ## Donwload and run epimodFBAfunctionsGUI
