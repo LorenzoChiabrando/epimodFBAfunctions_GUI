@@ -57,15 +57,19 @@ pip install cobra
 conda install -c conda-forge cobra
 ```
 
-## Cloning and Running the GUI
+## Donwload and run epimodFBAfunctionsGUI
 
-1. Clone this repository:
-   ```bash
+1. Donwload epimodFBAfunctionsGUI :
+   
+   ```
+   	install_github(
+  "https://github.com/LorenzoChiabrando/epimodFBAfunctions_GUI",
+  ref = "main"
+   
    ```
 
-git clone [https://github.com/LorenzoChiabrando/epimodFBAfunctions\_GUI.git](https://github.com/LorenzoChiabrando/epimodFBAfunctions_GUI.git) cd epimodFBAfunctions\_GUI
 
-````
+
 
 2. In R (console or Rstudio), launch the Shiny app:
 
