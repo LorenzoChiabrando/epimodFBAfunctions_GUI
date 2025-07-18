@@ -4,7 +4,7 @@
 #’
 #’ @param id Module namespace id
 #’ @return A tabPanel for hypernode selection and placeholder
-#’ @export
+#' @export
 sensitivityUI <- function(id) {
   ns <- shiny::NS(id)
   shiny::tabPanel(
@@ -23,7 +23,7 @@ sensitivityUI <- function(id) {
 #’ Sensitivity Analysis Section Server Module
 #’
 #’ @param id Module namespace id
-#’ @export
+#' @export
 sensitivityServer <- function(id) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns

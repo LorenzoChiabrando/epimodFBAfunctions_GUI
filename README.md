@@ -67,12 +67,13 @@ git clone [https://github.com/LorenzoChiabrando/epimodFBAfunctions\_GUI.git](htt
 
 ````
 
-2. In R, launch the Shiny app:
+2. In R (console or Rstudio), launch the Shiny app:
 
-   ```r
-library(shiny)
-runApp(".")
-````
+   ```
+   library(epimodFBAfunctionsGUI)
+   epimodFBAfunctionsGUI::run_app()
+
+	```
 
 3. Use the sidebar to navigate:
    - **Model Generation**: Configure and export FBA model hypernodes.

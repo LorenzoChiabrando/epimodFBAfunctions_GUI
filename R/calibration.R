@@ -4,7 +4,7 @@
 #’
 #’ @param id Module namespace id
 #’ @return A tabPanel for hypernode directory selection and placeholder image
-#’ @export
+#' @export
 calibrationUI <- function(id) {
   ns <- shiny::NS(id)
   shiny::tabPanel(
@@ -23,7 +23,7 @@ calibrationUI <- function(id) {
 #’ Calibration Section Server Module
 #’
 #’ @param id Module namespace id
-#’ @export
+#' @export
 calibrationServer <- function(id) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
