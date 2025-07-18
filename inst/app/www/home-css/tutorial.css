@@ -1,0 +1,73 @@
+/* ────────────────────────────────────────────────────────────────
+   TUTORIAL  •  due macro-card “a tutta larghezza”, una sotto l’altra
+   ──────────────────────────────────────────────────────────────── */
+
+/* contenitore delle card */
+.tutorial-cards{
+  display:flex;
+  flex-direction:column;          /* sempre in colonna            */
+  align-items:center;             /* centrate orizzontalmente     */
+  gap:60px;                       /* spazio verticale fra le card */
+  margin-top:40px;
+}
+
+/* singola card */
+.tutorial-card{
+  background:#fff;
+  border:2px solid #d4d8e0;
+  border-radius:12px;
+  width:95%;                      /* 95 % del contenitore         */
+  padding:2.5rem;
+  box-shadow:0 6px 18px rgba(0,0,0,0.07);
+  transition:transform .15s, box-shadow .15s;
+}
+.tutorial-card:hover{
+  transform:translateY(-6px);
+  box-shadow:0 10px 24px rgba(0,0,0,0.12);
+}
+
+/* immagine di copertina */
+.tutorial-card-img{
+  width:220px;                    /* più grande ma non gigante    */
+  max-width:100%;
+  height:auto;
+  margin:0 auto 1.5rem auto;
+  display:block;
+}
+
+/* titoli e lista step */
+.tutorial-card h4{
+  text-align:center;
+  font-size:1.55rem;
+  margin-bottom:1.5rem;
+}
+
+.tutorial-steps{
+  margin-left:2rem;
+  padding-left:0.5rem;
+  font-size:1.05rem;
+  line-height:1.6;
+}
+.tutorial-steps li{ margin-bottom:1.2rem; }
+
+/* screenshot interni */
+.step-img{
+  width:100%;
+  border:1px solid #e1e5ea;
+  border-radius:6px;
+  margin:1rem 0;
+}
+
+/* badge & code inline */
+.tutorial-steps code{
+  background:#f3f3f3;
+  padding:1px 4px;
+  border-radius:3px;
+}
+.tutorial-steps .badge{
+  font-size:0.75rem;
+  vertical-align:baseline;
+}
+
+/* mobile: nessuna modifica—sono già in colonna  */
+

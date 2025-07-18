@@ -1,0 +1,92 @@
+/* ──────────────────────────────────────────────────────────────
+   Boundary-Metabolites card  –  purple theme
+   ──────────────────────────────────────────────────────────── */
+
+/* Card container */
+.sim-section-card.boundaries{
+  background:#f9f5ff;
+  border-left:6px solid #9b59b6;
+  border-radius:6px;
+  padding:1.5rem;
+  margin-bottom:1.5rem;
+}
+.sim-section-card.boundaries .sim-section-title{
+  font-size:1.5rem;
+  font-weight:700;
+  color:#4b3866;
+}
+.sim-section-card.boundaries .sim-section-title::after{
+  content:"";
+  display:block;
+  width:60px;height:3px;
+  background:#9b59b6;
+  margin-top:.5rem;
+  border-radius:2px;
+}
+
+/* Search bar */
+.sim-section-card.boundaries .search-holder .form-control{
+  border:1px solid #9b59b6;
+  border-radius:20px;
+  padding-left:1rem;
+  transition:box-shadow .2s;
+}
+.sim-section-card.boundaries .search-holder .form-control:focus{
+  box-shadow:0 0 0 3px rgba(155,89,182,.25);
+}
+
+/* Scrollable list container */
+.bounds-list{
+  background:#f5efff;
+  border:1px solid #d9c9ef;
+  border-left:6px solid #b38add;
+  border-radius:4px;
+  max-height:320px;          /* vertical cap */
+  overflow-y:auto;
+  padding:0;
+}
+
+/* List rows */
+.bounds-list .list-group-item{
+  display:flex;align-items:center;      /* enables right-push with ms-auto */
+  cursor:pointer;
+  border:none;
+  padding:.55rem 1rem;
+  color:#5d4682;
+  font-weight:600;
+  background:transparent;
+  transition:background .15s;
+}
+.bounds-list .list-group-item:hover{
+  background:#e8ddff;
+}
+.bounds-list .list-group-item.active{
+  background:#9b59b6;
+  color:#fff;
+}
+
+/* Icons */
+.bounds-list .fa-circle{color:#c8b3e0;}
+.bounds-list .list-group-item.active .fa-check{color:#fff;}
+
+/* Species list (right-aligned, grey) */
+.bounds-list .species-info{
+  margin-left:auto;           /* push to the right */
+  font-size:.8rem;
+  color:#7d6faa;
+}
+
+/* Custom scrollbar (WebKit) */
+.bounds-list::-webkit-scrollbar{width:6px;}
+.bounds-list::-webkit-scrollbar-thumb{
+  background:#c2aadf;border-radius:4px;
+}
+
+.bounds-list .species-info{
+  margin-left:auto;                 /* right align */
+  font-size:.8rem;
+  color:#7d6faa;
+}
+
+
+

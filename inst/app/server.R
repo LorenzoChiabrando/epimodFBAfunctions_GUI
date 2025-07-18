@@ -20,6 +20,8 @@ function(input, output, session) {
   sensitivityServer("sen")
   calibrationServer("cal")
   dataVisServer("dv")
+  dataVis_senServer("dv_sen")
+  dataVis_calServer("dv_cal")
   minMicrobiomeServer("mm")
 
   # —————————————————————————————————————————————

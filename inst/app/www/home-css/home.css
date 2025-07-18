@@ -1,79 +1,65 @@
-/* inst/app/www/home-css/home.css */
-
-#home-page {
-  background: #f0f0f0;
-  padding: 4rem 2rem;
-  display: flex;
-  justify-content: center;
+/* ────────────────────────────────────────────────────────────
+   Tutorial macro-cards  –  layout XL e in colonna
+   (sovrascrive le regole precedenti)
+   ──────────────────────────────────────────────────────────── */
+.tutorial-cards{
+  display:flex;
+  flex-direction:column;     /* una carta sotto l’altra           */
+  align-items:center;        /* centrate orizzontalmente          */
+  gap: 60px;                 /* spazio abbondante fra le carte    */
+  margin-top:40px;
 }
 
-#home-page .home-container {
-  background: #ffffff;
-  border-radius: 12px;
-  box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-  padding: 3rem;
-  max-width: 1000px;
-  width: 100%;
+/* carta singola – larghezza quasi piena, padding maggiore */
+.tutorial-card{
+  background:#fff;
+  border:2px solid #d4d8e0;
+  border-radius:12px;
+  width:90%;                 /* usa quasi tutta la larghezza      */
+  max-width:1100px;          /* …ma non oltre – evita il “gigante” */
+  padding:2.5rem;            /* più “aria” dentro                 */
+  box-shadow:0 6px 18px rgba(0,0,0,0.07);
+  transition:.15s;
+}
+.tutorial-card:hover{
+  transform:translateY(-6px);
+  box-shadow:0 10px 24px rgba(0,0,0,0.12);
 }
 
-#home-page .home-main-card {
-  background: transparent;
-  padding-bottom: 2rem;
-  border-bottom: 1px solid #e0e0e0;
-  text-align: center;
+/* immagine grande centrata */
+.tutorial-card-img{
+  width:220px;
+  max-width:100%;
+  height:auto;
+  margin:0 auto 1.5rem auto;
+  display:block;
 }
 
-#home-page .home-logo {
-  max-width: 450px;
-  width: 100%;
-  height: auto;
-  margin-bottom: 1.5rem;
+/* titoli e testi un filo più grandi */
+.tutorial-card h4{
+  text-align:center;
+  font-size:1.55rem;
+  margin-bottom:1.5rem;
 }
 
-#home-page .home-title {
-  font-size: 3.75rem;
-  margin-bottom: 0.5rem;
-  color: #2c3e50;
+.tutorial-steps{
+  margin-left:2rem;
+  padding-left:0.5rem;
+  font-size:1.05rem;
+  line-height:1.6;
 }
 
-#home-page .home-subtitle {
-  font-size: 1.5rem;
-  color: #555555;
-  margin: 0;
+.tutorial-steps li{
+  margin-bottom:1.2rem;
 }
 
-#home-page .home-cards {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: 1.5rem;
-  margin-top: 2rem;
+/* mini-screenshot dentro i punti elenco */
+.step-img{
+  width:100%;
+  border:1px solid #e1e5ea;
+  border-radius:6px;
+  margin:1rem 0;
 }
 
-#home-page .home-card {
-  flex: 1 1 calc(50% - 1rem);
-  background: #f7f7f7;
-  border-radius: 8px;
-  padding: 1.75rem;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.05);
-}
-
-#home-page .home-card-title {
-  font-size: 2rem;
-  margin-bottom: 0.5rem;
-  color: #34495e;
-}
-
-#home-page .home-card-text {
-  font-size: 1.25rem;
-  color: #666666;
-  margin: 0;
-}
-
-#home-page .home-footer {
-  text-align: center;
-  margin-top: 3rem;
-  font-size: 1.2rem;
-  color: #777777;
-}
+/* nessuna media-query necessaria: le carte sono già in colonna      */
 

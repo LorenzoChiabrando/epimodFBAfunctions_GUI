@@ -4,7 +4,11 @@
 \alias{writeBoundaryConditionsStatic}
 \title{Write out a fully hard-coded boundary_conditions.json (for testing)}
 \usage{
-writeBoundaryConditionsStatic(output_json = "boundary_conditions.json")
+writeBoundaryConditionsStatic(
+  volume = 0.001,
+  cell_density = 1e+10,
+  output_json = "boundary_conditions.json"
+)
 }
 \arguments{
 \item{output_json}{Path to write the JSON file (default "boundary_conditions.json")}

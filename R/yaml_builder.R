@@ -1,72 +1,51 @@
-#’ Build the full configuration YAML
-#’
-#’ @param unit_cfgs  List of per‐model skeletons (from reactive unit_cfgs())  
-#’ @param global_cfg List of global settings (from reactive global_cfg())  
-#’ @param inputs     Named list of all your input values (e.g. shiny::reactiveValuesToList(input))
-#’ @param all_bounds Character vector of selected boundary metabolites
-#’ @return A character string of the rendered YAML
-#’ @export
-build_hypernode_yaml <- function(unit_cfgs, global_cfg, inputs, all_bounds) {
-  # helper to coalesce NULL → default
-  co <- function(x, default) if (!is.null(x)) x else default
+#' Build the full configuration YAML
+#'
+#' @param eff_cfgs   List risultante di effective_cfgs()  (override + fallback)
+#' @param global_cfg Lista delle impostazioni globali   (serve solo per il controllo capacità)
+#' @param all_bounds Character vector dei boundary metaboliti selezionati
+#' @return Stringa YAML completa
+#' @export
+build_hypernode_yaml <- function(eff_cfgs, global_cfg, all_bounds) {
 
-  n <- length(unit_cfgs)
+  n <- length(eff_cfgs)
 
-  # 1) capacity check
+  ## 1) Controllo capacità: dup * init  -------------------------------------------------
   per_mod_cells <- vapply(seq_len(n), function(i) {
-    dup_i  <- co(inputs[[paste0("p_dup_",   i)]], global_cfg$population$dup)
-    init_i <- co(inputs[[paste0("init_",    i)]], global_cfg$initial_count)
-    dup_i * init_i
+    cfg <- eff_cfgs[[i]]
+    cfg$population$dup * cfg$initial_count
   }, numeric(1))
+
   total_cells <- sum(per_mod_cells)
   if (total_cells > global_cfg$cell_density) {
-    stop(sprintf(
-      "Total cells (%.0f) exceed capacity (%.0f)", 
-      total_cells, global_cfg$cell_density
-    ))
+    stop(sprintf("Total cells (%.0f) exceed capacity (%.0f)",
+                 total_cells, global_cfg$cell_density))
   }
 
-  # 2) per‐model entries
+  ## 2) Costruzione voci per-modello  ---------------------------------------------------
   yaml_units <- lapply(seq_len(n), function(i) {
-    base <- unit_cfgs[[i]]
-
-    readOr <- function(prefix, default) {
-      co(inputs[[paste0(prefix, "_", i)]], default)
-    }
-
-    # biomass
-    bm <- list(
-      max  = readOr("b_max",  global_cfg$biomass$max),
-      mean = readOr("b_mean", global_cfg$biomass$mean),
-      min  = readOr("b_min",  global_cfg$biomass$min)
-    )
-
-    # population
-    pd <- list(
-      starv = readOr("p_starv", global_cfg$population$starv),
-      dup   = readOr("p_dup",   global_cfg$population$dup),
-      death = readOr("p_death", global_cfg$population$death)
-    )
-
-    # initial count
-    init <- readOr("init", global_cfg$initial_count)
+    cfg <- eff_cfgs[[i]]
 
     list(
-      model_name    = base$model_name,
-      label         = base$label,
-      biomass       = bm,
-      population    = pd,
-      initial_count = init
+      model_name    = cfg$model_name,
+      label         = cfg$label,
+      biomass       = cfg$biomass,
+      population    = cfg$population,
+      initial_count = cfg$initial_count
     )
   })
 
-  # 3) assemble and render
-  full <- list(
+  ## 3) Assemble-and-render + debug print  ----------------------------------------------
+  full_yaml <- list(
     boundary_metabolites = all_bounds,
     cellular_units       = yaml_units
   )
-  yaml::as.yaml(full, indent.mapping.sequence = TRUE)
+
+  message("[DBG] YAML structure to be rendered ⤵︎")
+  message(jsonlite::toJSON(full_yaml, pretty = TRUE, auto_unbox = TRUE))
+
+  yaml::as.yaml(full_yaml, indent.mapping.sequence = TRUE)
 }
+
 
 
 #' Write a Hypernode YAML to disk

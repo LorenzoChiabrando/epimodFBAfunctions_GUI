@@ -28,7 +28,7 @@ dashboardPage(
 
   ## ── SIDEBAR ──────────────────────────────────────────
   dashboardSidebar(
-    width = 400,
+    width = 500,
     sidebarMenu(id = "main_nav",
       menuItem("Home",             tabName = "home",           icon = icon("home")),
       menuItem("Model Generation", tabName = "mg",             icon = icon("cogs")),
@@ -37,7 +37,11 @@ dashboardPage(
         menuSubItem("Sensitivity", tabName = "sim_sensitivity"),
         menuSubItem("Calibration", tabName = "sim_calibration")
       ),
-      menuItem("Data Visualization", tabName = "dv", icon = icon("chart-line")),
+      menuItem("Data Visualization", tabName = "dv", icon = icon("chart-line"),
+        menuSubItem("Analysis",    tabName = "dv"),
+        menuSubItem("Sensitivity", tabName = "dv_sensitivity"),
+        menuSubItem("Calibration", tabName = "dv_calibration")
+      ),
       menuItem("minMicrobiome",       tabName = "mm", icon = icon("flask"))
     )
   ),
@@ -69,12 +73,11 @@ dashboardPage(
       # your existing stylesheets
       tags$link(rel = "stylesheet", type = "text/css", href = "reset.css"),
       tags$link(rel = "stylesheet", type = "text/css", href = "layout.css"),
-      tags$link(rel = "stylesheet", type = "text/css", href = "model-gen/topbar.css"),
-      tags$link(rel = "stylesheet", type = "text/css", href = "model-gen/sidebar.css"),
-      tags$link(rel = "stylesheet", type = "text/css", href = "model-gen/card.css"),
-      tags$link(rel = "stylesheet", type = "text/css", href = "model-gen/modelgen.css"),
-      tags$link(rel = "stylesheet", type = "text/css", href = "model-gen/model-list.css"),
+      
+      tags$link(rel = "stylesheet", type = "text/css", href = "model-gen/boundary-met.css"),
+
       tags$link(rel = "stylesheet", type = "text/css", href = "home-css/home.css"),
+      tags$link(rel = "stylesheet", type = "text/css", href = "home-css/tutorial.css"),
       
       
       tags$link(rel = "stylesheet", type = "text/css", href = "simulation-css/base.css"),
@@ -83,7 +86,9 @@ dashboardPage(
       tags$link(rel = "stylesheet", type = "text/css", href = "simulation-css/models-links.css"),
       tags$link(rel = "stylesheet", type = "text/css", href = "simulation-css/config-cards.css"),
       tags$link(rel = "stylesheet", type = "text/css", href = "simulation-css/dir-selector.css"),
-      tags$link(rel = "stylesheet", type = "text/css", href = "simulation-css/modal-model.css"),     
+      tags$link(rel = "stylesheet", type = "text/css", href = "simulation-css/modal-model.css"),
+      tags$link(rel = "stylesheet", type = "text/css", href = "simulation-css/load-save-buttons.css"),       
+      tags$link(rel = "stylesheet", type = "text/css", href = "simulation-css/link-modals.css"),       
       
       tags$link(rel = "stylesheet", type = "text/css", href = "data-vis/data-vis.css"),
 
@@ -113,6 +118,8 @@ dashboardPage(
       tabItem(tabName = "sim_sensitivity",sensitivityUI("sen")     ),
       tabItem(tabName = "sim_calibration",calibrationUI("cal")     ),
       tabItem(tabName = "dv",             dataVisUI("dv")         ),
+      tabItem(tabName = "dv_sensitivity",             dataVisUI_sen("dv_sen")         ),
+      tabItem(tabName = "dv_calibration",             dataVisUI_cal("dv_cal")         ),
       tabItem(tabName = "mm",             minMicrobiomeUI("mm")   )
     )
   ),

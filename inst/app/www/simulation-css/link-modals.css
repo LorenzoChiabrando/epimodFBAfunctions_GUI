@@ -1,0 +1,92 @@
+/* ── Model details modal ───────────────────────────────────────────────────── */
+/* Ultra‑specific but tidy */
+div.modal-dialog.modal-model > div.modal-content {
+  background: #f0fff4;            /* very light green */
+  border-left: 6px solid #27ae60;
+  border-radius: 8px;
+  box-shadow: 0 6px 18px rgba(0,0,0,.1);
+}
+
+/* header -------------------------------------------------------------- */
+div.modal-dialog.modal-model > div.modal-content > div.modal-header {
+  background: #27ae60;
+  color: #fff;
+  border-bottom: 0;
+  padding: 1rem 1.5rem;
+}
+
+
+.modal-model .modal-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+/* body ---------------------------------------------------------------------- */
+.modal-model .modal-body {
+  padding: 1.5rem;
+  color: #1a242f;
+}
+
+.modal-model .modal-body .modal-section-title {        /* all section <h4> */
+  margin-top: 0;
+  color: #27ae60;
+  border-bottom: 2px solid #27ae60;
+  padding-bottom: .25rem;
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
+.modal-model .modal-divider {                          /* <hr> element    */
+  border: 0;
+  height: 1px;
+  background: #27ae60;
+  opacity: .25;
+  margin: 1.25rem 0;
+}
+
+/* datatables / tables ------------------------------------------------------- */
+.modal-model .modal-table-wrapper {
+  border: 1px solid #e1e5ea;
+  border-radius: 4px;
+}
+
+.modal-model .modal-body table,
+.modal-model .modal-body .dataTables_wrapper {
+  margin-top: 1rem;
+}
+
+.modal-model .modal-body table th,
+.modal-model .modal-body table td {
+  padding: .5rem 1rem;
+  border-bottom: 1px solid #e1e5ea;
+}
+
+/* tabsetPanel tabs ---------------------------------------------------------- */
+.modal-model .modal-tabs .nav-tabs .nav-link {
+  color: #27ae60;
+  border: none;
+}
+.modal-model .modal-tabs .nav-tabs .nav-link.active {
+  background: #27ae60;
+  color: #fff;
+  border-radius: 4px 4px 0 0;
+}
+
+/* footer & buttons ---------------------------------------------------------- */
+.modal-model .modal-footer {
+  background: #fff;
+  border-top: none;
+  padding: 1rem 1.5rem;
+}
+
+.modal-model .modal-footer .modal-save-btn {           /* Save changes btn */
+  background: #27ae60 !important;
+  border-color: #219150;
+  color: #fff;
+}
+
+.modal-model .modal-footer .btn {
+  min-width: 100px;
+  margin-left: .5rem;
+}
+

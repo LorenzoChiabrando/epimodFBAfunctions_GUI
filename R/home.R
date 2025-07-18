@@ -59,37 +59,132 @@ homeUI <- function(id) {
         ),
 
         # Tutorial section
+        ## --------------------------------------------------------------------
+        ##  QUICK TUTORIAL  (two macro-cards)
+        ## --------------------------------------------------------------------
         div(
           class = "home-tutorial",
           h3("Quick Tutorial", class = "home-tutorial-title"),
-          p("Follow these steps to get started with epimodFBA:"),
-          tags$ol(
-            tags$li(
-              strong("Step 1: Model Generation"),
-              tags$br(),
-              tags$img(src = "tutorial/step1_model_gen.png", alt = "Model Generation Tutorial", class = "tutorial-img"),
-              p("Upload your .mat file and click 'Generate Model' to create your FBA model.")
-            ),
-            tags$li(
-              strong("Step 2: Simulation"),
-              tags$br(),
-              tags$img(src = "tutorial/step2_simulation.png", alt = "Simulation Tutorial", class = "tutorial-img"),
-              p("Select your community and parameters, then run the simulation with a single click.")
-            ),
-            tags$li(
-              strong("Step 3: minMicrobiome Algorithm"),
-              tags$br(),
-              tags$img(src = "tutorial/step3_minmicrobiome.png", alt = "minMicrobiome Tutorial", class = "tutorial-img"),
-              p("Identify the minimal set of microbes required to maintain function.")
-            ),
-            tags$li(
-              strong("Step 4: Data Visualization"),
-              tags$br(),
-              tags$img(src = "tutorial/step4_datavis.png", alt = "Data Visualization Tutorial", class = "tutorial-img"),
-              p("Explore flux distributions and community profiles with interactive plots.")
+
+          div(class = "tutorial-cards",
+
+            # ── CARD ① : MODEL GENERATION ──────────────────────────────────
+            div(class = "tutorial-card",
+              tags$img(src = "home-css/tutorial-images/model-gen/step1.png",
+                       alt = "Model Generation",
+                       class = "tutorial-card-img"),
+              h4("Model Generation"),
+
+              ## --- Step-by-step list ------------------------------------
+              tags$ol(class = "tutorial-steps",
+
+                tags$li(
+                  strong("Hypernode settings"),
+                  br(),
+                  "Open the ",
+                  em("Model Generation"), " tab, type a unique ",
+                  code("hypernode name"), "."
+                ),
+
+                tags$li(
+                  strong("Choose directories"),
+                  br(),
+                  "• Pick a ", strong("working directory"), " (where all output ",
+                  "folders will be created).",
+                  br(),
+                  "• Pick the ", strong(".mat directory"), " containing your models."
+                ),
+
+                tags$li(
+                  tags$img(src = "home-css/tutorial-images/model-gen/step2.png",
+                           alt = "Step 1 – directory selection",
+                           class = "step-img")
+                ),
+
+                tags$li(
+                  strong("Load / Reset"),
+                  br(),
+                  "Click ",
+                  tags$span(class = "badge bg-success", "Load Models"),
+                  " to import metadata.  ",
+                  "Use the ",
+                  tags$span(class = "badge bg-danger", "Reset"),
+                  " button to clear everything."
+                ),
+
+                tags$li(
+                  tags$img(src = "home-css/tutorial-images/model-gen/dir-models-list.png",
+                           alt = "Models list",
+                           class = "step-img")
+                ),
+
+                tags$li(
+                  strong("Inspect & edit each model"),
+                  br(),
+                  "Click a model name to open its modal and change biomass, ",
+                  "population or other parameters."
+                ),
+
+                tags$li(
+                  tags$img(src = "home-css/tutorial-images/model-gen/modification_on_single_models.png",
+                           alt = "Edit single model",
+                           class = "step-img")
+                ),
+
+                tags$li(
+                  strong("Global simulation settings"),
+                  br(),
+                  "Use the ",
+                  em("Global Community Settings"), " card for volume, cell ",
+                  "density and default bounds."
+                ),
+
+                tags$li(
+                  tags$img(src = "home-css/tutorial-images/model-gen/global.png",
+                           alt = "Global settings",
+                           class = "step-img")
+                ),
+
+                tags$li(
+                  strong("Select boundary metabolites (optional)"),
+                  br(),
+                  "Filter by species or search bar, then click a metabolite to ",
+                  "include / exclude it."
+                ),
+
+                tags$li(
+                  tags$img(src = "home-css/tutorial-images/model-gen/boundary.png",
+                           alt = "Boundary metabolite filter",
+                           class = "step-img")
+                ),
+
+                tags$li(
+                  strong("Generate the hypernode"),
+                  br(),
+                  "Press ",
+                  tags$span(class = "badge bg-success", "Generate Model"),
+                  " to build YAML, Petri-net and FBA files. A success modal ",
+                  "confirms completion."
+                )
+              ) # /ol
+            ),  # /tutorial-card
+
+
+
+            # ── CARD ② : MODEL ANALYSIS  (placeholder for now) ──────────────
+            div(class = "tutorial-card",
+              tags$img(src = "tutorial/model_analysis.png",
+                       alt = "Model Analysis",
+                       class = "tutorial-card-img"),
+              h4("Model Analysis"),
+              p("After generating a hypernode, switch to the ",
+                em("Simulation → Analysis"), " tab to define time span, ",
+                "tolerances and launch the solver.  ",
+                "A dedicated tutorial will be added soon.")
             )
-          )
-        ),
+          ) # /tutorial-cards
+        ),    # /home-tutorial
+
 
         # footer authorship
         div(class = "home-footer",

@@ -1,0 +1,43 @@
+/* CSS for just the “Save bounds…”, “Load projected…”, “Load not-projected…” buttons */
+
+/* 1. Container flex-gap to space all three buttons evenly */
+.sim-section-card.models .mt-2.d-flex {
+  display: flex;
+  gap: 1rem;
+}
+
+/* 2. Common button styling */
+.sim-section-card.models .mt-2.d-flex .btn-outline-secondary.btn-sm {
+  font-size: 1.125rem;       /* ~18px */
+  padding: 0.75rem 1.25rem;   /* taller and wider */
+  border-radius: 0.45rem;
+  transition: background-color 0.2s ease;
+}
+
+/* 3. “Save bounds…” (1st button) – green outline */
+.sim-section-card.models .mt-2.d-flex .btn-outline-secondary.btn-sm:nth-child(1) {
+  border-color: #28a745;
+  color:       #28a745;
+}
+.sim-section-card.models .mt-2.d-flex .btn-outline-secondary.btn-sm:nth-child(1):hover {
+  background-color: rgba(40, 167, 69, 0.1);
+}
+
+/* 4. “Load projected…” (2nd button) – teal outline */
+.sim-section-card.models .mt-2.d-flex .btn-outline-secondary.btn-sm:nth-child(2) {
+  border-color: #17a2b8;
+  color:       #17a2b8;
+}
+.sim-section-card.models .mt-2.d-flex .btn-outline-secondary.btn-sm:nth-child(2):hover {
+  background-color: rgba(23, 162, 184, 0.1);
+}
+
+/* 5. “Load not-projected…” (3rd button) – orange outline */
+.sim-section-card.models .mt-2.d-flex .btn-outline-secondary.btn-sm:nth-child(3) {
+  border-color: #fd7e14;
+  color:       #fd7e14;
+}
+.sim-section-card.models .mt-2.d-flex .btn-outline-secondary.btn-sm:nth-child(3):hover {
+  background-color: rgba(253, 126, 20, 0.1);
+}
+

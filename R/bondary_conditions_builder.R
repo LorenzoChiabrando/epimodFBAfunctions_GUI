@@ -4,7 +4,10 @@
 #'
 #' @param output_json Path to write the JSON file (default "boundary_conditions.json")
 #' @export
-writeBoundaryConditionsStatic <- function(output_json = "boundary_conditions.json") {
+writeBoundaryConditionsStatic <- function(volume       = 0.001,
+                                          cell_density = 1e10,
+                                          output_json  = "boundary_conditions.json")
+{
   # the full JSON payload, exactly as required
   json_text <- '
 {
@@ -992,13 +995,19 @@ writeBoundaryConditionsStatic <- function(output_json = "boundary_conditions.jso
   ]
 }'
 
-  # write to disk
-  writeLines(text = json_text, con = output_json)
+  # 2)  Parse in lista, sostituisci i campi dinamici
+  bc <- jsonlite::fromJSON(json_text, simplifyVector = FALSE)
+  bc$volume       <- volume
+  bc$cell_density <- cell_density
 
-  # optionally let the user know
-  message("Wrote static boundary_conditions to: ", output_json)
+  # 3)  Scrivi il file formattato
+  jsonlite::write_json(
+    bc,
+    path       = output_json,
+    pretty     = TRUE,
+    auto_unbox = TRUE,
+    digits     = NA    # evita la notazione scientifica
+  )
 
-  # invisibly return the path
-  invisible(output_json)
 }
 

@@ -508,33 +508,51 @@ simulationServer <- function(id) {
 		})
 
 		shiny::observeEvent(input$btn_run_sim, {
-			# ── 1) Set up paths ───────────────────────────────────────────────────────
-			base       <- shinyFiles::parseDirPath(roots, input$hypernode_dir)
-			gen_dir    <- file.path(base, "gen")
-			config_dir <- file.path(base, "config")
-			src_dir    <- file.path(base, "src")
-			output_dir <- file.path(base, "output")
-			hypernode  <- basename(base)
 
-			if (!dir.exists(gen_dir)) dir.create(gen_dir, recursive = TRUE)
+			# 0) Show blocking “Running…” modal with spinner
+			showModal(
+				modalDialog(
+				  title    = NULL,
+				  tagList(
+				    div(style = "text-align:center;",
+				        img(src = "running.png", height = "400px", alt = "Running…")
+				    ),
+				    br(),
+				    div("Running simulation and analysis…",
+				        style = "text-align:center; font-weight:bold;")
+				  ),
+				  footer    = NULL,
+				  easyClose = FALSE,
+				  size      = "l"
+				)
+			)
 
-			net_file   <- list.files(file.path(base, "petri_net"), "\\.PNPRO$", full.names = TRUE)
-			trans_file <- list.files(src_dir, "\\.cpp$", full.names = TRUE)[1]
-			fba_files  <- list.files(file.path(base, "biounits"), "\\.txt$", full.names = TRUE, recursive = TRUE)
+			# 1) Wrap the entire workflow in tryCatch
+			tryCatch({
 
-			# ── 2) Model generation ──────────────────────────────────────────────────
-			#shiny::withProgress(message = "Generating model...", value = 0, {
-			#	epimodFBAfunctions::model_generation_GUI(
-			#	  net_fname         = net_file,
-			#	  transitions_fname = trans_file,
-			#	  fba_fname         = fba_files,
-			#	  output_dir        = gen_dir
-			#	)
-			#})
-			#shiny::showNotification("Model generation completed.", type = "message")
+				# ── 1) Set up paths ───────────────────────────────────────────────────────
+				base       <- shinyFiles::parseDirPath(roots, input$hypernode_dir)
+				gen_dir    <- file.path(base, "gen")
+				config_dir <- file.path(base, "config")
+				src_dir    <- file.path(base, "src")
+				output_dir <- file.path(base, "output")
+				hypernode  <- basename(base)
 
-			# ── 3) Model analysis ────────────────────────────────────────────────────
-			shiny::withProgress(message = "Analyzing model...", value = 0, {
+				if (!dir.exists(gen_dir)) dir.create(gen_dir, recursive = TRUE)
+
+				net_file   <- list.files(file.path(base, "petri_net"), "\\.PNPRO$", full.names = TRUE)
+				trans_file <- list.files(src_dir, "\\.cpp$", full.names = TRUE)[1]
+				fba_files  <- list.files(file.path(base, "biounits"), "\\.txt$", full.names = TRUE, recursive = TRUE)
+
+				# ── 2) Model generation ──────────────────────────────────────────────────
+				epimodFBAfunctions::model_generation_GUI(
+				  net_fname         = net_file,
+				  transitions_fname = trans_file,
+				  fba_fname         = fba_files,
+				  output_dir        = gen_dir
+				)
+
+				# ── 3) Model analysis ────────────────────────────────────────────────────
 				epimodFBAfunctions::model_analysis_GUI(
 				  paths           = c(gen    = gen_dir,
 				                      config = config_dir,
@@ -556,139 +574,202 @@ simulationServer <- function(id) {
 				  ),
 				  volume = base
 				)
-			})
-			shiny::showNotification("Model analysis completed.", type = "message")
 
-			# ── 4) Show completion modal ─────────────────────────────────────────────
-			showModal(
-				shiny::modalDialog(
-				  title = "✅ Simulation & Analysis Complete",
-				  shiny::p("Your model has been generated and analyzed."),
-				  shiny::p("What would you like to do next?"),
-				  footer = tagList(
-				    actionButton(ns("btn_visualize"),   "Visualize Results", class = "btn-primary"),
-				    actionButton(ns("btn_new_sim"),     "New Simulation",    class = "btn-secondary"),
-				    modalButton("Close")
-				  ),
-				  easyClose = FALSE
+				# ── Success: remove spinner and show completion modal ─────────────────────
+				removeModal()
+				showModal(
+				  modalDialog(
+				    title = "✅ Simulation & Analysis Complete",
+				    tagList(
+				      div(style = "text-align:center;",
+				          img(src = "success.png", height = "400px", alt = "Success")
+				      ),
+				      br(),
+				      div("Your model has been generated and analyzed successfully.",
+				          style = "text-align:center; font-weight:bold;"),
+				      br(),
+				      div("What would you like to do next?", style = "text-align:center;")
+				    ),
+				    footer = tagList(
+				      actionButton(ns("btn_visualize"), "Visualize Results", class = "btn-primary"),
+				      actionButton(ns("btn_new_sim"),   "New Simulation",    class = "btn-secondary"),
+				      modalButton("Close")
+				    ),
+				    easyClose = FALSE,
+				    size      = "l"
+				  )
 				)
-			)
-			  session$userData$last_hypernode <- shinyFiles::parseDirPath(roots, input$hypernode_dir)
-		})
+
+				# record last hypernode path
+				session$userData$last_hypernode <- base
+
+			}, error = function(err) {
+				# ── Error: remove spinner and show error modal ───────────────────────────
+				removeModal()
+				showModal(
+				  modalDialog(
+				    title = "❌ Simulation Error",
+				    tagList(
+				      div(style = "text-align:center;",
+				          img(src = "error.png", height = "400px", alt = "Error")
+				      ),
+				      br(),
+				      div(paste("An error occurred during simulation:", err$message),
+				          style = "text-align:center; color:red; font-weight:bold;")
+				    ),
+				    easyClose = TRUE,
+				    footer = modalButton("Close"),
+				    size   = "l"
+				  )
+				)
+			})
+
+		})  # /observeEvent input$btn_run_sim
+
 		
 		 # ── modals for each bacteria ─────────────────────────────────────────
-# ── modals for each bacteria ─────────────────────────────────────────
-observe({
-  req(dir_valid())
-  lapply(models(), function(mdl) {
+		observe({
+			req(dir_valid())
+			lapply(models(), function(mdl) {
 
-    observeEvent(input[[paste0("model_", mdl)]], ignoreInit = TRUE, {
+				observeEvent(input[[paste0("model_", mdl)]], ignoreInit = TRUE, {
 
-      info   <- node_data()[[mdl]]
-      params <- info$params
-      proj   <- info$projected
-      unproj <- info$unprojected
-      pop    <- info$population
+				  info   <- node_data()[[mdl]]
+				  params <- info$params
+				  proj   <- info$projected
+				  unproj <- info$unprojected
+				  pop    <- info$population
 
-      # unique IDs -----------------------------------------------------
-      proj_id  <- paste0("proj_tbl_", mdl)
-      unpr_id  <- paste0("unpr_tbl_", mdl)
-      save_id  <- paste0("save_",     mdl)
-      param_id <- paste0("param_",    mdl)
-      pop_id   <- paste0("pop_",      mdl)
+				  # unique IDs -----------------------------------------------------
+				  proj_id  <- paste0("proj_tbl_", mdl)
+				  unpr_id  <- paste0("unpr_tbl_", mdl)
+				  save_id  <- paste0("save_",     mdl)
+				  param_id <- paste0("param_",    mdl)
+				  pop_id   <- paste0("pop_",      mdl)
 
-      # modal ----------------------------------------------------------
-      showModal(
-        modalDialog(
-          title = paste("Model:", mdl), size = "l", easyClose = FALSE,
-          tagList(
-            fluidRow(
-              column(6, h4("Parameter Recap"), tableOutput(ns(param_id))),
-              column(6, h4("Initial Population"), verbatimTextOutput(ns(pop_id)))
-            ),
-            hr(),
-            h4("Exchange Reaction Bounds"),
-            tabsetPanel(
-              tabPanel("Projected",
-                div(style="max-height:350px; overflow-y:auto;",
-                    DT::dataTableOutput(ns(proj_id)))
-              ),
-              tabPanel("Not projected",
-                div(style="max-height:350px; overflow-y:auto;",
-                    DT::dataTableOutput(ns(unpr_id)))
-              )
-            )
-          ),
-          footer = tagList(
-            modalButton("Close"),
-            actionButton(ns(save_id), "Save Changes", class = "btn-primary")
-          ),
-          class = "modal-model"
-        )
-      )
+				  # modal ----------------------------------------------------------
+				  showModal(
+						modalDialog(
+							title     = paste("Model:", mdl),
+							size      = "l",
+							easyClose = FALSE,
+							
+							# ⬇︎ give the dialog a unique, semantic class
+							class     = "modal-model",      # ⬅︎ was "prova"
+							
+							tagList(
+								fluidRow(
+									column(
+										6,
+										h4("Parameter recap",   class = "modal-section-title"),
+										tableOutput(ns(param_id))
+									),
+									column(
+										6,
+										h4("Initial population", class = "modal-section-title"),
+										verbatimTextOutput(ns(pop_id))
+									)
+								),
+								
+								hr(class = "modal-divider"),
+								
+								h4("Exchange reaction bounds", class = "modal-section-title"),
+								
+								div(class = "modal-tabs",
+									tabsetPanel(
+										type = "tabs",
+										tabPanel(
+										  "Projected",
+										  div(
+										    class = "modal-table-wrapper",
+										    style = "max-height:350px; overflow-y:auto;",
+										    DT::dataTableOutput(ns(proj_id))
+										  )
+										),
+										tabPanel(
+										  "Not projected",
+										  div(
+										    class = "modal-table-wrapper",
+										    style = "max-height:350px; overflow-y:auto;",
+										    DT::dataTableOutput(ns(unpr_id))
+										  )
+										)
+									)
+								)
+							),
+							
+							footer = tagList(
+								modalButton("Close"),
+								actionButton(
+									ns(save_id), "Save changes",
+									class = "btn-primary modal-save-btn"
+								)
+							)
+						)
+					)
 
-      # static outputs -------------------------------------------------
-      output[[param_id]] <- renderTable({
-        data.frame(Parameter = names(params),
-                   Value     = unlist(params, use.names = FALSE),
-                   stringsAsFactors = FALSE)
-      }, striped = TRUE, hover = TRUE, spacing = "s")
+				  # static outputs -------------------------------------------------
+				  output[[param_id]] <- renderTable({
+				    data.frame(Parameter = names(params),
+				               Value     = unlist(params, use.names = FALSE),
+				               stringsAsFactors = FALSE)
+				  }, striped = TRUE, hover = TRUE, spacing = "s")
 
-      output[[pop_id]] <- renderText(pop)
+				  output[[pop_id]] <- renderText(pop)
 
-      # datatables -----------------------------------------------------
-      opts <- list(dom="ft", paging=FALSE, ordering=FALSE,
-                   scrollY=300, scrollCollapse=TRUE)
-      lock <- list(target="cell", disable=list(columns=c(0)))
+				  # datatables -----------------------------------------------------
+				  opts <- list(dom="ft", paging=FALSE, ordering=FALSE,
+				               scrollY=300, scrollCollapse=TRUE)
+				  lock <- list(target="cell", disable=list(columns=c(0)))
 
-      output[[proj_id]] <- DT::renderDataTable({
-        DT::datatable(proj, rownames = FALSE, editable = lock, options = opts)
-      })
-      output[[unpr_id]] <- DT::renderDataTable({
-        DT::datatable(unproj, rownames = FALSE, editable = lock, options = opts)
-      })
+				  output[[proj_id]] <- DT::renderDataTable({
+				    DT::datatable(proj, rownames = FALSE, editable = lock, options = opts)
+				  })
+				  output[[unpr_id]] <- DT::renderDataTable({
+				    DT::datatable(unproj, rownames = FALSE, editable = lock, options = opts)
+				  })
 
-      # *** IMPORTANT: proxy uses *un-namespaced* ID ***
-      proj_proxy <- DT::dataTableProxy(proj_id , session = session)
-      unpr_proxy <- DT::dataTableProxy(unpr_id , session = session)
+				  # *** IMPORTANT: proxy uses *un-namespaced* ID ***
+				  proj_proxy <- DT::dataTableProxy(proj_id , session = session)
+				  unpr_proxy <- DT::dataTableProxy(unpr_id , session = session)
 
-			# projected edits ---------------------------------------------------
-			observeEvent(input[[paste0(proj_id, "_cell_edit")]], ignoreInit = TRUE, {
-				edit <- input[[paste0(proj_id, "_cell_edit")]]      # ← no ns()
-				proj[edit$row, edit$col + 1] <<- as.numeric(edit$value)
+					# projected edits ---------------------------------------------------
+					observeEvent(input[[paste0(proj_id, "_cell_edit")]], ignoreInit = TRUE, {
+						edit <- input[[paste0(proj_id, "_cell_edit")]]      # ← no ns()
+						proj[edit$row, edit$col + 1] <<- as.numeric(edit$value)
 
-				info$projected <- proj
-				tmp <- node_data(); tmp[[mdl]] <- info; node_data(tmp)
+						info$projected <- proj
+						tmp <- node_data(); tmp[[mdl]] <- info; node_data(tmp)
 
-				DT::replaceData(proj_proxy, proj, resetPaging = FALSE, rownames = FALSE)
-				rebuild_bounds_csv(session_files$proj, "projected")
+						DT::replaceData(proj_proxy, proj, resetPaging = FALSE, rownames = FALSE)
+						rebuild_bounds_csv(session_files$proj, "projected")
+					})
+
+					# unprojected edits -------------------------------------------------
+					observeEvent(input[[paste0(unpr_id, "_cell_edit")]], ignoreInit = TRUE, {
+						edit <- input[[paste0(unpr_id, "_cell_edit")]]      # ← no ns()
+						unproj[edit$row, edit$col + 1] <<- as.numeric(edit$value)
+
+						info$unprojected <- unproj
+						tmp <- node_data(); tmp[[mdl]] <- info; node_data(tmp)
+
+						DT::replaceData(unpr_proxy, unproj, resetPaging = FALSE, rownames = FALSE)
+						rebuild_bounds_csv(session_files$nproj, "unprojected")
+					})
+
+
+				  # save button ----------------------------------------------------
+				  observeEvent(input[[save_id]], ignoreInit = TRUE, {
+				    removeModal()
+				    shiny::showNotification(
+				      "Bounds saved to GUI files.",
+				      id = "boundsToast",          # single toast replaces previous
+				      type = "message", duration = 3
+				    )
+				  })
+				})
 			})
-
-			# unprojected edits -------------------------------------------------
-			observeEvent(input[[paste0(unpr_id, "_cell_edit")]], ignoreInit = TRUE, {
-				edit <- input[[paste0(unpr_id, "_cell_edit")]]      # ← no ns()
-				unproj[edit$row, edit$col + 1] <<- as.numeric(edit$value)
-
-				info$unprojected <- unproj
-				tmp <- node_data(); tmp[[mdl]] <- info; node_data(tmp)
-
-				DT::replaceData(unpr_proxy, unproj, resetPaging = FALSE, rownames = FALSE)
-				rebuild_bounds_csv(session_files$nproj, "unprojected")
-			})
-
-
-      # save button ----------------------------------------------------
-      observeEvent(input[[save_id]], ignoreInit = TRUE, {
-        removeModal()
-        shiny::showNotification(
-          "Bounds saved to GUI files.",
-          id = "boundsToast",          # single toast replaces previous
-          type = "message", duration = 3
-        )
-      })
-    })
-  })
-})
+		})
 
 
 
