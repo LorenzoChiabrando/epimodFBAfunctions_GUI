@@ -30,10 +30,9 @@ A Shiny-based graphical user interface (GUI) for generating and simulating flux-
    )
 
    # epimod core
-   install_github(
-     "https://github.com/qBioTurin/epimod",
-     ref = "epimod_pFBA"
-   )
+	 install.packages("devtools")
+	 library(devtools)
+	 install_github("https://github.com/LorenzoChiabrando/epimod_gui", ref="main")
 
    library(epimodFBAfunctions)
    library(epimod)
