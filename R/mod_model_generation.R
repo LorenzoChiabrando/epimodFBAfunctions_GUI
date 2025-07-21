@@ -50,18 +50,18 @@ modelGenServer <- function(id) {
 
 
     # ---- 1) helper: blank config skeleton ---------------------------
-		empty_cfg <- function(fp) {
-			base <- tools::file_path_sans_ext(basename(fp))
-			list(
-				file_path      = fp,
-				model_name     = base,
-				label          = base,
-				biomass        = list(max = NA, mean = NA, min = NA),
-				population     = list(starv = NA, dup = NA, death = NA),
-				initial_count  = NA
-			)
-		}
-
+		 empty_cfg <- function(fp) {
+			 base <- tools::file_path_sans_ext(basename(fp))
+			 list(
+				 file_path      = fp,
+				 model_name     = base,
+				 label          = base,
+				 biomass        = list(max = NA, mean = NA, min = NA),
+				 population     = list(starv = NA, dup = NA, death = NA),
+				 initial_count  = NA,
+			   mu_max         = NA
+			 )
+		 }
 
 
     # ---- 2) reactive state for downstream modules -------------------
@@ -98,24 +98,28 @@ modelGenServer <- function(id) {
 		  # ─ Conteggio iniziale ─────────────────────────────────────────
 		  c$initial_count <- ifelse(is.na(c$initial_count), g$initial_count, c$initial_count)
 
+		  # ── μ-max override: default to 1 if none set ─────────────────────────
+		  c$mu_max <- ifelse(is.na(c$mu_max), 1, c$mu_max)
+
 		  c
 		})
 	})
-## ── DEBUG live: stampa ogni volta che cambiano -----------------------
-observe({
-  message("\n[DBG] global_cfg() ➜ ",
-          jsonlite::toJSON(global_cfg(), pretty = TRUE, auto_unbox = TRUE))
-})
+	
+		## ── DEBUG live: stampa ogni volta che cambiano -----------------------
+		observe({
+			message("\n[DBG] global_cfg() ➜ ",
+				      jsonlite::toJSON(global_cfg(), pretty = TRUE, auto_unbox = TRUE))
+		})
 
-observe({
-  message("\n[DBG] unit_cfgs() (override) ➜ ",
-          jsonlite::toJSON(unit_cfgs(), pretty = TRUE, auto_unbox = TRUE))
-})
+		observe({
+			message("\n[DBG] unit_cfgs() (override) ➜ ",
+				      jsonlite::toJSON(unit_cfgs(), pretty = TRUE, auto_unbox = TRUE))
+		})
 
-observe({
-  message("\n[DBG] effective_cfgs() (merge) ➜ ",
-          jsonlite::toJSON(effective_cfgs(), pretty = TRUE, auto_unbox = TRUE))
-})
+		observe({
+			message("\n[DBG] effective_cfgs() (merge) ➜ ",
+				      jsonlite::toJSON(effective_cfgs(), pretty = TRUE, auto_unbox = TRUE))
+		})
 
     
 		project_root <- getOption("epimodFBAfunctionsGUI.user_proj",
@@ -217,17 +221,6 @@ observe({
 				        icon  = icon("folder-open"),
 				        class = "btn btn-primary shinyDirButton flex-grow-1"
 				      ),
-						div(),
-				    ## Load Models (left) – only when both dirs valid
-				    if (wd_ok && md_ok)
-				      div(class = "mt-3",
-				        actionButton(
-				          ns("btn_step1"), "Load Models",
-				          icon  = icon("play"),
-				          class = "btn btn-success px-4 align-self-center"
-				        )
-				      ),
-
 				    ## Reset (right) – when any dir chosen
 				    if (wd_ok || md_ok)
 				      div(class = "mt-3 text-right",
@@ -236,7 +229,16 @@ observe({
 				          icon  = icon("redo"),
 				          class = "btn-reset-sim align-self-center"
 				        )
-				      )
+				      ),
+				    				    ## Load Models (left) – only when both dirs valid
+				    if (wd_ok && md_ok)
+				      div(class = "mt-3",
+				        actionButton(
+				          ns("btn_step1"), "Load Models",
+				          icon  = icon("play"),
+				          class = "btn btn-success px-4 align-self-center"
+				        )
+				      ),
 				  )
 				)
 			}
@@ -802,63 +804,62 @@ global_settings_card <- div(
 		})
 
 
-		# ---- 7) Respond to clicks → inject modal content ----------------------
+			# ---- 7) Respond to clicks → inject modal content ----------------------
 		observe({
-			models <- unit_cfgs()      # list() con le cfg dei singoli modelli
-			meta   <- meta_cache()     # metadati letti da CSV
+			models <- unit_cfgs()      # per-model configs
+			meta   <- meta_cache()     # metadata from CSV
 
-			## crea un modal per ogni modello caricato ---------------------------
+			## create a modal for each loaded model ---------------------------
 			lapply(seq_along(models), function(i) {
-
 				local({
+				  my_i    <- i                      # freeze index
+				  cfg_now <- models[[my_i]]         # current config
 
-				  my_i    <- i                               # congela l’indice
-				  cfg_now <- models[[my_i]]                  # cfg corrente
-
-				  base_id <- paste0("m", my_i, "_")          # prefisso unico
+				  base_id <- paste0("m", my_i, "_") # unique prefix
 				  id_raw  <- function(suff) paste0(base_id, suff)
 
-				  ## ID “plain” da usare con input$ / output$ / proxy
 				  tbl_meta <- id_raw("tbl_meta")
 				  tbl_rxn  <- id_raw("tbl_rxn")
 				  tbl_bnd  <- id_raw("tbl_bnd")
 				  save_raw <- id_raw("save")
-				  
-				  
 
-				    ## ---------- SAVE button --------------------------------------
-				    observeEvent(input[[save_raw]], ignoreInit = TRUE, {
+				  ## ---------- SAVE button --------------------------------------
+				  observeEvent(input[[save_raw]], ignoreInit = TRUE, {
+				    cfgs <- unit_cfgs()  # copy global state
 
-				      cfgs <- unit_cfgs()          # copia dello stato globale
+				    # Biomass settings
+				    cfgs[[my_i]]$biomass$max  <- input[[id_raw("bmax")]]
+				    cfgs[[my_i]]$biomass$mean <- input[[id_raw("bmean")]]
+				    cfgs[[my_i]]$biomass$min  <- input[[id_raw("bmin")]]
 
-				      cfgs[[my_i]]$biomass$max  <- input[[id_raw("bmax")]]
-				      cfgs[[my_i]]$biomass$mean <- input[[id_raw("bmean")]]
-				      cfgs[[my_i]]$biomass$min  <- input[[id_raw("bmin")]]
+				    # Population dynamics
+				    cfgs[[my_i]]$population$starv <- input[[id_raw("pstarv")]]
+				    cfgs[[my_i]]$population$dup   <- input[[id_raw("pdup")]]
+				    cfgs[[my_i]]$population$death <- input[[id_raw("pdeath")]]
 
-				      cfgs[[my_i]]$population$starv <- input[[id_raw("pstarv")]]
-				      cfgs[[my_i]]$population$dup   <- input[[id_raw("pdup")]]
-				      cfgs[[my_i]]$population$death <- input[[id_raw("pdeath")]]
+				    # Initial count
+				    cfgs[[my_i]]$initial_count    <- input[[id_raw("init")]]
 
-				      cfgs[[my_i]]$initial_count    <- input[[id_raw("init")]]
+				    # mu_max (max growth rate)
+				    cfgs[[my_i]]$mu_max           <- input[[id_raw("mu_max")]]
 
-				      unit_cfgs(cfgs)              # salva nel reactiveVal
+				    unit_cfgs(cfgs)  # save back
 
-				      removeModal()
-							showNotification(
-								paste("Changes saved for", cfgs[[my_i]]$label),
-								id       = "modelSaveToast",   # id unico e fisso
-								type     = "message",
-								duration = 2
-							)
-				    })      
+				    removeModal()
+				    showNotification(
+				      paste("Changes saved for", cfgs[[my_i]]$label),
+				      id       = "modelSaveToast",
+				      type     = "message",
+				      duration = 2
+				    )
+				  })
 
-				  ## ascolta il click sul link del modello -------------------------
+				  ## show modal on model click -----------------------------------
 				  observeEvent(input[[paste0("model_", my_i)]], ignoreInit = TRUE, {
-
 				    cache <- meta[[cfg_now$model_name]]
 				    if (is.null(cache)) return()
 
-				    ## ---------- MODAL --------------------------------------------
+				    ## build modal --------------------------------------------
 				    showModal(
 				      modalDialog(
 				        title     = paste("Model:", cfg_now$label),
@@ -870,28 +871,29 @@ global_settings_card <- div(
 				          div(class = "card mb-3",
 				            h4("Configuration", class = "modal-section-title"),
 				            div(class = "modelgen-config",
+				              # Biomass
 				              div(class = "modelgen-config__group",
 				                h5("Biomass data"),
-				                numericInput(ns(id_raw("bmax")),  "Max",
-				                             value = cfg_now$biomass$max,  min = 0),
-				                numericInput(ns(id_raw("bmean")), "Mean",
-				                             value = cfg_now$biomass$mean, min = 0),
-				                numericInput(ns(id_raw("bmin")),  "Min",
-				                             value = cfg_now$biomass$min,  min = 0)
+				                numericInput(ns(id_raw("bmax")),  "Max",  value = cfg_now$biomass$max,  min = 0),
+				                numericInput(ns(id_raw("bmean")), "Mean", value = cfg_now$biomass$mean, min = 0),
+				                numericInput(ns(id_raw("bmin")),  "Min",  value = cfg_now$biomass$min,  min = 0)
 				              ),
+				              # Population
 				              div(class = "modelgen-config__group",
 				                h5("Population dynamics"),
-				                numericInput(ns(id_raw("pstarv")), "Starvation",
-				                             value = cfg_now$population$starv, min = 0),
-				                numericInput(ns(id_raw("pdup")),   "Duplication",
-				                             value = cfg_now$population$dup,  min = 0),
-				                numericInput(ns(id_raw("pdeath")), "Death",
-				                             value = cfg_now$population$death, min = 0)
+				                numericInput(ns(id_raw("pstarv")), "Starvation", value = cfg_now$population$starv, min = 0),
+				                numericInput(ns(id_raw("pdup")),   "Duplication", value = cfg_now$population$dup,  min = 0),
+				                numericInput(ns(id_raw("pdeath")), "Death",       value = cfg_now$population$death, min = 0)
 				              ),
+				              # Initial Count
 				              div(class = "modelgen-config__group",
 				                h5("Initial population"),
-				                numericInput(ns(id_raw("init")),  "Count",
-				                             value = cfg_now$initial_count, min = 0)
+				                numericInput(ns(id_raw("init")),  "Count", value = cfg_now$initial_count, min = 0)
+				              ),
+				              # mu_max
+				              div(class = "modelgen-config__group",
+				                h5("μ max"),
+				                numericInput(ns(id_raw("mu_max")), "μ max", value = ifelse(is.null(cfg_now$mu_max), 1, cfg_now$mu_max), min = 0)
 				              )
 				            )
 				          ),
@@ -899,48 +901,36 @@ global_settings_card <- div(
 				          div(class = "card",
 				            h4("Data preview", class = "modal-section-title"),
 				            tabsetPanel(type = "tabs",
-				              tabPanel("Metabolites",
-				                       DT::dataTableOutput(ns(tbl_meta))),
-				              tabPanel("Reactions",
-				                       DT::dataTableOutput(ns(tbl_rxn))),
-				              tabPanel("Boundary metabolites",
-				                       DT::dataTableOutput(ns(tbl_bnd)))
+				              tabPanel("Metabolites",         DT::dataTableOutput(ns(tbl_meta))),
+				              tabPanel("Reactions",           DT::dataTableOutput(ns(tbl_rxn))),
+				              tabPanel("Boundary metabolites",DT::dataTableOutput(ns(tbl_bnd)))
 				            )
 				          )
 				        ),
 
 				        footer = tagList(
 				          modalButton("Close"),
-				          actionButton(ns(save_raw), "Save changes",
-				                       class = "btn-primary modal-save-btn")
+				          actionButton(ns(save_raw), "Save changes", class = "btn-primary modal-save-btn")
 				        )
 				      )
 				    )
 
-				    ## ---------- rendering DT -------------------------------------
+				    ## render tables ------------------------------------------
 				    opts <- list(pageLength = 10, scrollY = 300, scrollX = TRUE,
 				                 dom = "ftip", className = "stripe hover")
-
 				    output[[tbl_meta]] <- DT::renderDataTable(
-				      DT::datatable(cache$meta, options = opts, rownames = FALSE),
-				      server = FALSE
-				    )
+				      DT::datatable(cache$meta, options = opts, rownames = FALSE), server = FALSE)
 				    output[[tbl_rxn]]  <- DT::renderDataTable(
-				      DT::datatable(cache$rxn,  options = opts, rownames = FALSE),
-				      server = FALSE
-				    )
+				      DT::datatable(cache$rxn,  options = opts, rownames = FALSE), server = FALSE)
 				    output[[tbl_bnd]]  <- DT::renderDataTable(
-				      DT::datatable(cache$bnd,  options = opts, rownames = FALSE),
-				      server = FALSE
-				    )
-
+				      DT::datatable(cache$bnd,  options = opts, rownames = FALSE), server = FALSE)
 				    lapply(c(tbl_meta, tbl_rxn, tbl_bnd), function(id)
 				      outputOptions(output, id, suspendWhenHidden = FALSE))
-
 				  })  # /observeEvent model click
 				})    # /local
 			})      # /lapply
 		})        # /outer observe
+
 
 
 

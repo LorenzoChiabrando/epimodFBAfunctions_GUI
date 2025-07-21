@@ -30,7 +30,8 @@ build_hypernode_yaml <- function(eff_cfgs, global_cfg, all_bounds) {
       label         = cfg$label,
       biomass       = cfg$biomass,
       population    = cfg$population,
-      initial_count = cfg$initial_count
+      initial_count = cfg$initial_count,
+      mu_max        = cfg$mu_max  
     )
   })
 

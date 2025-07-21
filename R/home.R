@@ -31,31 +31,59 @@ homeUI <- function(id) {
           actionLink(
             ns("go_mg"), 
             div(class = "home-card",
+            		tags$img(
+									src   = "prova.png",       # put your file in www/
+									alt   = "Model Generation Icon",
+									style = "display: block; margin: 0 auto;",
+									width = "200px",
+									height = "250px"
+								),
                 h3("Model Generation", class = "home-card-title"),
-                p("Easily build FBA models from your .mat files.", class = "home-card-text")
+                p("Easily build FBA models from your .mat files.", class = "home-card-text"),
             )
           ),
           actionLink(
             ns("go_sim"), 
             div(class = "home-card",
+                tags$img(
+									src   = "prova2.png",       # put your file in www/
+									alt   = "Model Simulation Icon",
+									style = "display: block; margin: 0 auto;",
+									width = "200px",
+									height = "250px"
+								),
                 h3("Simulation", class = "home-card-title"),
                 p("Run community flux–balance simulations in one click.", class = "home-card-text")
             )
           ),
           actionLink(
+            ns("go_dv"), 
+            div(class = "home-card",
+                tags$img(
+									src   = "data_vis.png",       # put your file in www/
+									alt   = "Data Visualization Icon",
+									style = "display: block; margin: 0 auto;",
+									width = "200px",
+									height = "250px"
+								),
+                h3("Data Visualization", class = "home-card-title"),
+                p("Explore results with interactive plots.", class = "home-card-text")
+            )
+          ),
+          actionLink(
             ns("go_mm"), 
             div(class = "home-card",
+                tags$img(
+									src   = "min_microbiome_optimized.png",       # put your file in www/
+									alt   = "Min Microbiome Icon",
+									style = "display: block; margin: 0 auto;",
+									width = "100px",
+									height = "250px"
+								),            
                 h3("minMicrobiome Algorithm", class = "home-card-title"),
                 p("Identify minimal microbial consortia.", class = "home-card-text")
             )
           ),
-          actionLink(
-            ns("go_dv"), 
-            div(class = "home-card",
-                h3("Data Visualization", class = "home-card-title"),
-                p("Explore results with interactive plots.", class = "home-card-text")
-            )
-          )
         ),
 
         # Tutorial section
