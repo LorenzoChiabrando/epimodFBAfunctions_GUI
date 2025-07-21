@@ -6,6 +6,9 @@
 #' @export
 writeBoundaryConditionsStatic <- function(volume       = 0.001,
                                           cell_density = 1e10,
+                                          fba_upper_bound = 1000,
+                                          fba_lower_bound = -1000,
+                                          background_met  = 1000,
                                           output_json  = "boundary_conditions.json")
 {
   # the full JSON payload, exactly as required
@@ -997,8 +1000,11 @@ writeBoundaryConditionsStatic <- function(volume       = 0.001,
 
   # 2)  Parse in lista, sostituisci i campi dinamici
   bc <- jsonlite::fromJSON(json_text, simplifyVector = FALSE)
-  bc$volume       <- volume
-  bc$cell_density <- cell_density
+  bc$volume       				 <- volume
+  bc$cell_density 				 <- cell_density
+  bc$fba_upper_bound       <- fba_upper_bound
+  bc$fba_lower_bound 			 <- fba_lower_bound
+  bc$background_met        <- background_met
 
   # 3)  Scrivi il file formattato
   jsonlite::write_json(

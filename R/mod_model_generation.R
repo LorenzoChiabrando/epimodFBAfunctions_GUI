@@ -49,33 +49,38 @@ modelGenServer <- function(id) {
 		selected_bmet <- reactiveVal(character())   # holds chosen metabolite IDs
 
 
-    # ---- 1) helper: blank config skeleton ---------------------------
-		 empty_cfg <- function(fp) {
-			 base <- tools::file_path_sans_ext(basename(fp))
-			 list(
-				 file_path      = fp,
-				 model_name     = base,
-				 label          = base,
-				 biomass        = list(max = NA, mean = NA, min = NA),
-				 population     = list(starv = NA, dup = NA, death = NA),
-				 initial_count  = NA,
-			   mu_max         = NA
-			 )
-		 }
-
+		empty_cfg <- function(fp) {
+			base  <- tools::file_path_sans_ext(basename(fp))
+			parts <- unlist(strsplit(base, "_"))
+			# take the first character of each part, collapse and lower-case
+			abbr  <- tolower(paste0(substr(parts, 1, 1), collapse = ""))
+			list(
+				file_path     = fp,
+				model_name    = base,
+				label         = abbr,            
+				biomass       = list(max = NA, mean = NA, min = NA),
+				population    = list(starv = NA, dup = NA, death = NA),
+				initial_count = NA,
+				mu_max        = NA
+			)
+		}
 
     # ---- 2) reactive state for downstream modules -------------------
     unit_cfgs  <- shiny::reactiveVal(list())
     current    <- shiny::reactiveVal(1)
     meta_cache <- shiny::reactiveVal(list())
 
-    global_cfg <- shiny::reactiveVal(list(
-      biomass      = list(max = 1, mean = 1, min = 0),
-      population   = list(starv = 0, dup = 1, death = 0),
-      volume       = 0.001,
-      cell_density = 1e10,
-      initial_count= 1e6
-    ))
+		global_cfg <- shiny::reactiveVal(list(
+			biomass           = list(max = 1, mean = 1, min = 0),
+			population        = list(starv = 0, dup = 1, death = 0),
+			volume            = 0.001,
+			cell_density      = 1e10,
+			initial_count     = 1e6,
+			fba_upper_bound   = 1000,
+			fba_lower_bound   = -1000,
+			background_met    = 1000
+		))
+
     
 	# ── 2-bis)  valore “effettivo” di ogni modello  ─────────────────────
 	#           (override per-model  +  fallback ai global)
@@ -623,7 +628,7 @@ modelGenServer <- function(id) {
 				    actionLink(
 				      inputId = ns(paste0("model_", i)),
 				      label   = tagList(icon("cube"),
-				                        span(cfgs[[i]]$label, class = "model-label")),
+				                        span(cfgs[[i]]$model_name, class = "model-label")),
 				      class   = "list-group-item list-group-item-action model-link"
 				    )
 				  })
@@ -724,6 +729,31 @@ global_settings_card <- div(
           ns("global_cell_density"), "Max Cell Density [cells/mL]",
           value = isolate(global_cfg()$cell_density),
           min = 0, width = "100%"
+        )
+      )
+    )
+  ),
+  
+# ── System Parameters ─────────────────────────────────────────────
+  div(class = "modelgen-global__section mb-3",
+    h5("System Parameters"),
+    fluidRow(
+      column(4,
+        numericInput(
+          ns("global_fba_ub"), "FBA Upper Bound (mmol/h)",
+          value = isolate(global_cfg()$fba_upper_bound), min = 0, width = "100%"
+        )
+      ),
+      column(4,
+        numericInput(
+          ns("global_fba_lb"), "FBA Lower Bound (mmol/h)",
+          value = isolate(global_cfg()$fba_lower_bound), width = "100%"
+        )
+      ),
+      column(4,
+        numericInput(
+          ns("global_background_met"), "Background met (mmol)",
+          value = isolate(global_cfg()$background_met), min = 0, width = "100%"
         )
       )
     )
@@ -847,7 +877,7 @@ global_settings_card <- div(
 
 				    removeModal()
 				    showNotification(
-				      paste("Changes saved for", cfgs[[my_i]]$label),
+				      paste("Changes saved for", cfgs[[my_i]]$model_name),
 				      id       = "modelSaveToast",
 				      type     = "message",
 				      duration = 2
@@ -860,60 +890,141 @@ global_settings_card <- div(
 				    if (is.null(cache)) return()
 
 				    ## build modal --------------------------------------------
-				    showModal(
-				      modalDialog(
-				        title     = paste("Model:", cfg_now$label),
-				        size      = "l",
-				        easyClose = FALSE,
-				        class     = "modal-model",
+						showModal(
+							tags$div(
+								id = "modelDetailModal",  # unique hook
+								tags$head(
+									tags$style(HTML("
+										/* Wrapper specifico per questo modal */
+										#modelDetailModal .modal-content {
+											background-color: #f5f5f5;      /* grigio chiaro */
+											border-radius: 8px;
+											overflow: hidden;
+										}
 
-				        tagList(
-				          div(class = "card mb-3",
-				            h4("Configuration", class = "modal-section-title"),
-				            div(class = "modelgen-config",
-				              # Biomass
-				              div(class = "modelgen-config__group",
-				                h5("Biomass data"),
-				                numericInput(ns(id_raw("bmax")),  "Max",  value = cfg_now$biomass$max,  min = 0),
-				                numericInput(ns(id_raw("bmean")), "Mean", value = cfg_now$biomass$mean, min = 0),
-				                numericInput(ns(id_raw("bmin")),  "Min",  value = cfg_now$biomass$min,  min = 0)
-				              ),
-				              # Population
-				              div(class = "modelgen-config__group",
-				                h5("Population dynamics"),
-				                numericInput(ns(id_raw("pstarv")), "Starvation", value = cfg_now$population$starv, min = 0),
-				                numericInput(ns(id_raw("pdup")),   "Duplication", value = cfg_now$population$dup,  min = 0),
-				                numericInput(ns(id_raw("pdeath")), "Death",       value = cfg_now$population$death, min = 0)
-				              ),
-				              # Initial Count
-				              div(class = "modelgen-config__group",
-				                h5("Initial population"),
-				                numericInput(ns(id_raw("init")),  "Count", value = cfg_now$initial_count, min = 0)
-				              ),
-				              # mu_max
-				              div(class = "modelgen-config__group",
-				                h5("μ max"),
-				                numericInput(ns(id_raw("mu_max")), "μ max", value = ifelse(is.null(cfg_now$mu_max), 1, cfg_now$mu_max), min = 0)
-				              )
-				            )
-				          ),
+										/* Header e footer */
+										#modelDetailModal .modal-header,
+										#modelDetailModal .modal-footer {
+											background-color: #27ae60;      /* verde scuro */
+											color: #ffffff;
+											border: none;
+											padding: 1rem 1.5rem;
+										}
 
-				          div(class = "card",
-				            h4("Data preview", class = "modal-section-title"),
-				            tabsetPanel(type = "tabs",
-				              tabPanel("Metabolites",         DT::dataTableOutput(ns(tbl_meta))),
-				              tabPanel("Reactions",           DT::dataTableOutput(ns(tbl_rxn))),
-				              tabPanel("Boundary metabolites",DT::dataTableOutput(ns(tbl_bnd)))
-				            )
-				          )
-				        ),
+										/* Titolo principale */
+										#modelDetailModal .modal-title {
+											font-size: 2rem;
+											font-weight: 700;
+											text-align: center;
+											position: relative;
+											margin-bottom: 0.5rem;
+											color: #ffffff;
+										}
+										/* Bordo inferiore del titolo */
+										#modelDetailModal .modal-title::after {
+											content: \"\";
+											display: block;
+											width: 80px;
+											height: 4px;
+											background: #2ecc71;            /* verde più chiaro per contrasto */
+											margin: 0.5rem auto 0;          /* centrato */
+											border-radius: 2px;
+										}
 
-				        footer = tagList(
-				          modalButton("Close"),
-				          actionButton(ns(save_raw), "Save changes", class = "btn-primary modal-save-btn")
-				        )
-				      )
-				    )
+										/* Corpo del modal */
+										#modelDetailModal .modal-body {
+											padding: 1.5rem;
+											color: #333333;
+										}
+
+										/* Bottone Close più evidente */
+										#modelDetailModal .btn-default {
+											background-color: transparent;
+											color: #ffffff;
+											border: 1px solid #ffffff;
+										}
+										#modelDetailModal .btn-default:hover {
+											background-color: rgba(255,255,255,0.1);
+										}
+
+										/* Bottone Save */
+										#modelDetailModal .modal-save-btn {
+											background-color: #2ecc71;
+											border-color: #27ae60;
+											color: #ffffff;
+										}
+										#modelDetailModal .modal-save-btn:hover {
+											background-color: #27ae60;
+										}
+									"))
+								),
+								modalDialog(
+								title = div(style="background:#27ae60; color:#fff; padding: 1rem;",
+                paste("Model:", cfg_now$model_name)),
+								size      = "l",
+								easyClose = FALSE,
+								class     = "modal-model modal-model-detail",
+
+								tagList(
+									# ── Configuration Sub-Cards ─────────────────────────────────────
+									div(class = "modelgen-config",
+
+										# Biomass Data Sub-Card
+										div(class = "modelgen-subcard mb-3",
+											h5("Biomass data", class = "subcard-title"),
+											fluidRow(
+												column(4, numericInput(ns(id_raw("bmax")),  "Max",  value = cfg_now$biomass$max,  min = 0)),
+												column(4, numericInput(ns(id_raw("bmean")), "Mean", value = cfg_now$biomass$mean, min = 0)),
+												column(4, numericInput(ns(id_raw("bmin")),  "Min",  value = cfg_now$biomass$min,  min = 0))
+											)
+										),
+								 hr(class = "modal-divider"),
+										# Population Dynamics Sub-Card
+										div(class = "modelgen-subcard mb-3",
+											h5("Population dynamics", class = "subcard-title"),
+											fluidRow(
+												column(4, numericInput(ns(id_raw("pstarv")), "Starvation",  value = cfg_now$population$starv, min = 0)),
+												column(4, numericInput(ns(id_raw("pdup")),   "Duplication", value = cfg_now$population$dup,   min = 0)),
+												column(4, numericInput(ns(id_raw("pdeath")), "Death",       value = cfg_now$population$death, min = 0))
+											)
+										),
+								 hr(class = "modal-divider"),
+										# Initial Population Sub-Card
+										div(class = "modelgen-subcard mb-3",
+											h5("Initial population", class = "subcard-title"),
+											fluidRow(
+												column(12, numericInput(ns(id_raw("init")),  "Count", value = cfg_now$initial_count, min = 0))
+											)
+										),
+								 hr(class = "modal-divider"),
+										# μ max Sub-Card
+										div(class = "modelgen-subcard mb-3",
+											h5("μ max", class = "subcard-title"),
+											fluidRow(
+												column(12, numericInput(ns(id_raw("mu_max")), "μ max", value = ifelse(is.null(cfg_now$mu_max), 1, cfg_now$mu_max), min = 0))
+											)
+										)
+									), # /modelgen-config
+								 hr(class = "modal-divider"),
+									# ── Data Preview ────────────────────────────────────────────────────
+									div(class = "modelgen-subcard mb-3",
+										h5("Data Preview", class = "subcard-title"),
+										tabsetPanel(type = "tabs",
+											tabPanel("Metabolites",          DT::dataTableOutput(ns(tbl_meta))),
+											tabPanel("Reactions",            DT::dataTableOutput(ns(tbl_rxn))),
+											tabPanel("Boundary metabolites", DT::dataTableOutput(ns(tbl_bnd)))
+										)
+									)
+								),
+
+								footer = tagList(
+									modalButton("Close"),
+									actionButton(ns(save_raw), "Save changes", class = "btn-primary modal-save-btn")
+								)
+
+							)
+						)
+					)
 
 				    ## render tables ------------------------------------------
 				    opts <- list(pageLength = 10, scrollY = 300, scrollX = TRUE,
@@ -932,12 +1043,6 @@ global_settings_card <- div(
 		})        # /outer observe
 
 
-
-
-
-
-
-
 		# ---- 8) Boundary‐metabolites (unchanged) -----------------------------
 		output$tbl_boundaries <- DT::renderDataTable({
 			all_boundaries()
@@ -946,7 +1051,7 @@ global_settings_card <- div(
 			 options = list(
 				 dom        = "ftip",
 				 pageLength = 10,
-				 scrollY    = "300px",
+				 scrollY    = "500px",
 				 scrollX    = TRUE,
 				 className  = "stripe hover",
 				 columnDefs = list(
@@ -968,26 +1073,33 @@ global_settings_card <- div(
 		
 		# Auto‐sync global_cfg whenever any global input changes
 		observe({
-			req(input$global_b_max, input$global_b_mean, input$global_b_min,
-				  input$global_p_starv, input$global_p_dup,   input$global_p_death,
-				  input$global_volume,  input$global_cell_density, input$global_init_count)
-
+			req(
+				input$global_b_max, input$global_b_mean, input$global_b_min,
+				input$global_p_starv, input$global_p_dup, input$global_p_death,
+				input$global_init_count,
+				input$global_volume, input$global_cell_density,
+				input$global_fba_ub, input$global_fba_lb, input$global_background_met
+			)
 			global_cfg(list(
-				biomass    = list(
+				biomass         = list(
 				  max  = input$global_b_max,
 				  mean = input$global_b_mean,
 				  min  = input$global_b_min
 				),
-				population = list(
+				population      = list(
 				  starv = input$global_p_starv,
 				  dup   = input$global_p_dup,
 				  death = input$global_p_death
 				),
-				volume       = input$global_volume,
-				cell_density = input$global_cell_density,
-				initial_count =  input$global_init_count
+				initial_count   = input$global_init_count,
+				volume          = input$global_volume,
+				cell_density    = input$global_cell_density,
+				fba_upper_bound = input$global_fba_ub,
+				fba_lower_bound = input$global_fba_lb,
+				background_met  = input$global_background_met
 			))
 		})
+
 
 # ---- C‴) YAML gen: live-read per-model inputs with global fallbacks AND write to disk ----
 		# ---- C‴) YAML gen: live-read per-model inputs with global fallbacks AND write to disk ----
@@ -1030,11 +1142,18 @@ global_settings_card <- div(
 				bc_json    <- file.path(config_dir, "boundary_conditions.json")
 				vol  <- global_cfg()$volume
 				dens <- global_cfg()$cell_density
+				fba_upper_bound <- global_cfg()$fba_upper_bound
+				fba_lower_bound <- global_cfg()$fba_lower_bound
+				background_met <- global_cfg()$background_met
+				
 
 				writeBoundaryConditionsStatic(
 					volume       = vol,
 					cell_density = dens,
-					output_json  = bc_json  
+					output_json  = bc_json,
+					fba_upper_bound = fba_upper_bound,
+					fba_lower_bound = fba_lower_bound,
+					background_met  = background_met
 				)
 
 
@@ -1198,7 +1317,10 @@ global_settings_card <- div(
 				population   = list(starv = 0, dup = 1, death = 0),
 				volume       = 0.001,
 				cell_density = 1e10,
-				initial_count= 1e6
+				initial_count= 1e6,
+				fba_upper_bound <- 1000,
+				fba_lower_bound <- -1000,
+				background_met <- 1000
 			))
 
 			# 4) RESET BOUNDARY SELECTION

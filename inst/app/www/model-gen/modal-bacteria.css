@@ -1,0 +1,103 @@
+/* ── Detail‐Modal “Data Preview” Panel (light green border) ── */
+.modal-model-detail > .modal-dialog .modal-content .card:last-of-type {
+  background: #f0fff4;                /* pale green */
+  border-left: 6px solid #27ae60;
+  border-radius: 6px;
+  padding: 1rem;
+  margin-top: 2rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+/* Section titles inside that Data Preview card */
+.modal-model-detail .card:last-of-type .modal-section-title {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #27ae60;
+  text-transform: uppercase;
+  margin-bottom: 1rem;
+  position: relative;
+}
+.modal-model-detail .card:last-of-type .modal-section-title::after {
+  content: "";
+  display: block;
+  width: 50px;
+  height: 3px;
+  background: #27ae60;
+  margin-top: 0.5rem;
+  border-radius: 2px;
+}
+
+/* ── Inner “sub-cards” for each config section ── */
+.modal-model-detail .modelgen-subcard {
+  background: #f7fff0;              /* very light green */
+  border-left: 6px solid #27ae60;   /* green accent */
+  border-radius: 6px;
+  padding: 1rem;
+}
+.modal-model-detail .modelgen-subcard + .modelgen-subcard {
+  margin-top: 1.5rem;               /* extra space between sub-cards */
+}
+
+/* Space out each group of inputs */
+.modal-model-detail .modelgen-config__group {
+  margin-bottom: 1.5rem;
+}
+
+/* Match input borders to the green theme */
+.modal-model-detail .modelgen-subcard .form-control {
+  border: 1px solid #27ae60;
+}
+
+
+/* ── Sub-card Titles: Bigger + Underline ── */
+.modal-model-detail .modelgen-subcard .subcard-title {
+  font-size: 1.4rem;                /* larger text */
+  font-weight: 700;
+  text-transform: uppercase;
+  position: relative;
+  margin-bottom: 1rem;
+  color: #1A242F;
+}
+.modal-model-detail .modelgen-subcard .subcard-title::after {
+  content: "";
+  display: block;
+  width: 60px;
+  height: 3px;
+  background: #27ae60;              /* same accent as config card */
+  margin-top: 0.5rem;
+  border-radius: 2px;
+}
+
+/* ── Round the Numeric Inputs ── */
+.modal-model-detail .modelgen-subcard .form-control {
+  border-radius: 0.5rem;            /* pill-ish corners */
+  padding: 0.5rem;                  /* a little breathing room */
+}
+
+/* ── Dark-Green Header & Footer for modal-model ── */
+.modal-model .modal-header {
+  background: #196f3d  !important ;     /* dark green */
+  color: #ffffff  !important ;          /* white text */
+  border-bottom: none;
+  border-top-left-radius: .3rem;
+  border-top-right-radius: .3rem;
+}
+
+.modal-model .modal-header .modal-title {
+  color: #ffffff;
+}
+
+.modal-model .modal-footer {
+  background: #196f3d  !important ;     /* same dark green */
+  border-top: none;
+  border-bottom-left-radius: .3rem;
+  border-bottom-right-radius: .3rem;
+}
+
+.modal-model .modal-footer .btn {
+  background: #27ae60  !important ;     /* accent green for buttons */
+  border-color: #1e8449  !important ;
+  color: #fff;
+}
+
+

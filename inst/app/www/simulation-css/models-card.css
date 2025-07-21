@@ -81,3 +81,61 @@
 }
 
 
+
+
+/* ── Global Community Settings Card ── */
+.sim-section-card.config {
+  background: #fff8f0;               /* very light orange */
+  border-left: 6px solid #e67e22;    /* orange accent */
+  border-radius: 6px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+/* Section title underline in the global card */
+.sim-section-card.config .sim-section-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1A242F;
+  margin-bottom: 1rem;
+  position: relative;
+}
+.sim-section-card.config .sim-section-title::after {
+  content: "";
+  display: block;
+  width: 60px;
+  height: 3px;
+  background: #e67e22;
+  margin-top: 0.5rem;
+  border-radius: 2px;
+}
+
+/* ── Sub-section mini-cards inside Global ── */
+.modelgen-global__section {
+  background: #fff2e6;               
+  border-left: 4px solid #e38922;    
+  border-radius: 4px;
+  padding: 1rem;
+  margin-bottom: 4rem;       /* ↑ more vertical gap */
+}
+
+/* Bigger, more prominent subsection titles */
+.modelgen-global__section h5 {
+  font-size: 1.75rem;        /* ↑ bump from 1.25rem */
+  font-weight: 600;
+  position: relative;
+  margin-bottom: 2rem;       /* ↑ more space below title */
+}
+
+/* Thicker little underline bar */
+.modelgen-global__section h5::after {
+  content: "";
+  display: block;
+  width: 50px;               
+  height: 4px;               /* ↑ thicker line */
+  background: #e67e22;
+  margin-top: 0.3rem;
+  border-radius: 2px;
+}
+
+
+

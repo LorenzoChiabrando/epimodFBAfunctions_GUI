@@ -202,18 +202,23 @@ simulationServer <- function(id) {
 			# ----- build node_data with separate projected, forward, reverse ----
 			info_list <- lapply(models(), function(mdl) {
 				row    <- yaml_tbl[yaml_tbl$model == mdl, , drop = FALSE]
-				params <- if (nrow(row)) as.list(row[1, c("bioMax","bioMean","bioMin","starv","dup","death","mu_max")]) else
-				          as.list(setNames(rep(NA,6), c("bioMax","bioMean","bioMin","starv","dup","death","mu_max")))
+				params <- if (nrow(row)) as.list(row[1, c("bioMax","bioMean","bioMin","starv","dup","death","mu_max")]) else 
+						      as.list(setNames(rep(NA,7), c("bioMax","bioMean","bioMin","starv","dup","death","mu_max")))
+				# set default initial biomass = bioMean from YAML (or NA)
+				init_b <- if (nrow(row)) row$bioMean[1] else NA
+
 				list(
-				  params     = params,
-				  population = if (nrow(row)) row$population[1] else NA,
-				  projected  = make_bounds_proj(proj_df,    mdl),
-				  unproj_f   = make_bounds_f(nproj_f_df, mdl),
-				  unproj_r   = make_bounds_r(nproj_r_df, mdl)
+					params           = params,
+					population       = if (nrow(row)) row$population[1] else NA,
+					projected        = make_bounds_proj(proj_df,    mdl),
+					unproj_f         = make_bounds_f(nproj_f_df, mdl),
+					unproj_r         = make_bounds_r(nproj_r_df, mdl),
+					initial_biomass  = init_b                       # <<< new field
 				)
 			})
 			names(info_list) <- models()
 			node_data(info_list)
+
 		})
 
 
@@ -437,18 +442,30 @@ simulationServer <- function(id) {
 				      class = "btn-reset-sim"
 				    )
 				  ),
-					div(class = "mt-2 d-flex gap-2",
-						actionButton(
-						   ns("save_configuration"),
-						   label = tagList(icon("download"), "Save Configuration…"),
-						   class = "btn btn-outline-secondary btn-sm"
-						),
-						actionButton(
-						   ns("load_configuration"),
-						   tagList(icon("upload"), "Load Configuration…"),
-						   class = "btn btn-outline-secondary btn-sm"
-						),
-					)
+div(class = "mt-2 d-flex gap-2",
+  actionButton(
+    ns("save_configuration"),
+    label = tagList(icon("download"), "Save Configuration…"),
+    class = "btn btn-sm text-white",
+    style = "
+      background-color: #2980b9;
+      border-color:     #1f5f8b;
+      color:            #fff;
+    "
+  ),
+  actionButton(
+    ns("load_configuration"),
+    label = tagList(icon("upload"), "Load Configuration…"),
+    class = "btn btn-sm text-white",
+    style = "
+      background-color: #2980b9;
+      border-color:     #1f5f8b;
+      color:            #fff;
+    "
+  )
+)
+
+
 				  
 				)
 			} else {
@@ -492,31 +509,31 @@ simulationServer <- function(id) {
 				    })
 				  ),
 				  
-					div(class = "mt-2 d-flex gap-2",
-							shinyFiles::shinyDirButton(
-								id    = ns("export_dir"),
-								label = "Save bounds…",
-								title = "Copy the *_gui.csv files to a folder you choose",
-								icon  = icon("download"),
-								class = "btn btn-outline-secondary btn-sm"
-							),
-							shinyFiles::shinyFilesButton(        # ←--- correct name
-								id    = ns("load_proj"),
-								label = "Load projected…",
-								title = "Pick a CSV to replace ub_bounds_projected_gui.csv",
-								multiple = FALSE,
-								icon  = icon("file-upload"),
-								class = "btn btn-outline-secondary btn-sm"
-							),
-							shinyFiles::shinyFilesButton(        # ←--- correct name
-								id    = ns("load_nproj"),
-								label = "Load not-projected…",
-								title = "Pick a CSV to replace ub_bounds_not_projected_gui.csv",
-								multiple = FALSE,
-								icon  = icon("file-upload"),
-								class = "btn btn-outline-secondary btn-sm"
-							)
-					)
+				#	div(class = "mt-2 d-flex gap-2",
+				#			shinyFiles::shinyDirButton(
+				#				id    = ns("export_dir"),
+				#				label = "Save bounds…",
+				#				title = "Copy the *_gui.csv files to a folder you choose",
+				#				icon  = icon("download"),
+				#				class = "btn btn-outline-secondary btn-sm"
+				#			),
+				#			shinyFiles::shinyFilesButton(        # ←--- correct name
+				#				id    = ns("load_proj"),
+				#				label = "Load projected…",
+				#				title = "Pick a CSV to replace ub_bounds_projected_gui.csv",
+				#				multiple = FALSE,
+				#				icon  = icon("file-upload"),
+				#				class = "btn btn-outline-secondary btn-sm"
+				#			),
+				#			shinyFiles::shinyFilesButton(        # ←--- correct name
+				#				id    = ns("load_nproj"),
+				#				label = "Load not-projected…",
+				#				title = "Pick a CSV to replace ub_bounds_not_projected_gui.csv",
+				#				multiple = FALSE,
+				#				icon  = icon("file-upload"),
+				#				class = "btn btn-outline-secondary btn-sm"
+				#			)
+				#	)
 
 				)
 			}
@@ -589,41 +606,51 @@ simulationServer <- function(id) {
 				  )
 				},
 				
-				# ──────────────── System Parameters (from JSON) ────────────────
-				hr(),
-				# single tooltip on section title
-				h5(
-				  "System Parameters",
-				  span(icon("question-circle"), style = "cursor:help; margin-left:8px;",
-				       title = "Default system parameters."),
-				        class = "sim-section-title"
-				       
-				),
-				fluidRow(
-				  column(4,
-				    numericInput(ns("fba_ub"), "FBA Upper Bound (mmol/h)",
-				                 value = default_fba_ub, min = 0, width = "60%")
-				  ),
-				  column(4,
-				    numericInput(ns("fba_lb"), "FBA Lower Bound (mmol/h)",
-				                 value = default_fba_lb, width = "60%")
-				  ),
-				  column(4,
-				    numericInput(ns("background_met"), "Background met (mmol)",
-				                 value = default_background, min = 0, width = "60%")
-				  )
-				),
-				fluidRow(
-				  column(4,
-				    numericInput(ns("sys_volume"), "System Volume (mL)",
-				                 value = default_volume, min = 0, width = "60%")
-				  ),
-				  column(4,
-				    numericInput(ns("cell_density"), "Initial Cell Density (cells/mL)",
-				                 value = default_cell_density, min = 0, width = "60%")
-				  )
-				),
-				
+			## ──────────────── System Parameters (temporarily hidden) ────────────────
+			# ──────────────── System Parameters (hidden) ────────────────
+# instead of directly emitting the inputs, wrap them in a conditionalPanel
+# whose JavaScript condition is always false:
+conditionalPanel(
+  condition = "false", 
+  div(
+    hr(),
+    h5(
+      "System Parameters",
+      span(
+        icon("question-circle"), 
+        style = "cursor:help; margin-left:8px;",
+        title = "Default system parameters."
+      ),
+      class = "sim-section-title"
+    ),
+    fluidRow(
+      column(4,
+        numericInput(ns("fba_ub"), "FBA Upper Bound (mmol/h)",
+                     value = default_fba_ub, min = 0, width = "60%")
+      ),
+      column(4,
+        numericInput(ns("fba_lb"), "FBA Lower Bound (mmol/h)",
+                     value = default_fba_lb, width = "60%")
+      ),
+      column(4,
+        numericInput(ns("background_met"), "Background met (mmol)",
+                     value = default_background, min = 0, width = "60%")
+      )
+    ),
+    fluidRow(
+      column(4,
+        numericInput(ns("sys_volume"), "System Volume (mL)",
+                     value = default_volume, min = 0, width = "60%")
+      ),
+      column(4,
+        numericInput(ns("cell_density"), "Initial Cell Density (cells/mL)",
+                     value = default_cell_density, min = 0, width = "60%")
+      )
+    )
+  )
+),
+
+
 				# Run button row
 				fluidRow(
 				  column(12,
@@ -656,29 +683,19 @@ simulationServer <- function(id) {
 				)
 			)
 
-			# 1) Wrap the entire workflow in tryCatch with a finally for cleanup
 			tryCatch({
 
 				# ── 1) Set up paths ───────────────────────────────────────────────────────
 				base       <- shinyFiles::parseDirPath(roots, input$hypernode_dir)
-				gen_dir    <- file.path(base, "gen")
 				config_dir <- file.path(base, "config")
-				src_dir    <- file.path(base, "src")
-				output_dir <- file.path(base, "output")
 				hypernode  <- basename(base)
 
-				if (!dir.exists(gen_dir)) dir.create(gen_dir, recursive = TRUE)
-
-				net_file   <- list.files(file.path(base, "petri_net"), "\\.PNPRO$", full.names = TRUE)
-				trans_file <- list.files(src_dir, "\\.cpp$", full.names = TRUE)[1]
-				fba_files  <- list.files(file.path(base, "biounits"), "\\.txt$", full.names = TRUE, recursive = TRUE)
-
-				# ── SAVE GUI-SNAPSHOT YAML ─────────────────────────────────────────────────
+				# ── READ ORIGINAL YAML ────────────────────────────────────────────────────
 				yml_file <- list.files(config_dir, "\\.ya?ml$", full.names = TRUE)[1]
 				orig_yml <- if (length(yml_file)) yaml::read_yaml(yml_file) else list()
-				gui_yml  <- orig_yml
+				gui_yml  <- orig_yml   # ci metto dentro solo le modifiche
 
-				# 1) record simulation timing & tolerances
+				# ── UPDATE simulation section ────────────────────────────────────────────
 				gui_yml$simulation <- list(
 				  initial_time       = input$i_time,
 				  final_time         = input$f_time,
@@ -687,7 +704,7 @@ simulationServer <- function(id) {
 				  relative_tolerance = input$rtol
 				)
 
-				# 2) boundary metabolite concentrations
+				# ── UPDATE boundary concentrations ───────────────────────────────────────
 				bm_defs <- orig_yml$boundary_metabolites %||% character()
 				if (length(bm_defs)) {
 				  met_ids <- gsub("[^A-Za-z0-9_]", "_", bm_defs)
@@ -698,7 +715,7 @@ simulationServer <- function(id) {
 				    )
 				}
 
-				# 3) system parameters (including volume)
+			  # ── UPDATE system parameters ─────────────────────────────────────────────
 				gui_yml$simulation$system_parameters <- list(
 				  fba_upper_bound = input$fba_ub,
 				  fba_lower_bound = input$fba_lb,
@@ -707,20 +724,42 @@ simulationServer <- function(id) {
 				  cell_density    = input$cell_density
 				)
 
-				# 4) write snapshot file
+				# ── UPDATE cellular_units to include initial_biomass ─────────────────────
+				if (!is.null(orig_yml$cellular_units)) {
+				  nd <- node_data()
+				  for (i in seq_along(orig_yml$cellular_units)) {
+				    unit <- orig_yml$cellular_units[[i]]
+				    mdl  <- unit$model_name
+				    if (mdl %in% names(nd)) {
+				      info <- nd[[mdl]]
+				      # overwrite existing fields…
+				      orig_yml$cellular_units[[i]]$biomass$max   <- info$params$bioMax
+				      orig_yml$cellular_units[[i]]$biomass$mean  <- info$params$bioMean
+				      orig_yml$cellular_units[[i]]$biomass$min   <- info$params$bioMin
+				      orig_yml$cellular_units[[i]]$population$starv <- info$params$starv
+				      orig_yml$cellular_units[[i]]$population$dup   <- info$params$dup
+				      orig_yml$cellular_units[[i]]$population$death <- info$params$death
+				      orig_yml$cellular_units[[i]]$mu_max         <- info$params$mu_max
+				      orig_yml$cellular_units[[i]]$initial_count  <- info$population
+				      # ← new:
+				      orig_yml$cellular_units[[i]]$initial_biomass <- info$initial_biomass %||% info$params$bioMean
+				    }
+				  }
+				  gui_yml$cellular_units <- orig_yml$cellular_units
+				}
+
+				# ── WRITE OUT THE GUI SNAPSHOT YAML ──────────────────────────────────────
 				gui_yaml_path <- file.path(config_dir, paste0(hypernode, "_gui.yaml"))
 				yaml::write_yaml(gui_yml, gui_yaml_path)
-				# ─────────────────────────────────────────────────────────────────────────
 
-				# ── 2) Model generation ──────────────────────────────────────────────────
-				# (omitted for brevity)
 
-				# ── 3) Model analysis ────────────────────────────────────────────────────
+
+				# ── 2) Model generation & 3) Model analysis ─────────────────────────────
 				epimodFBAfunctions::model_analysis_GUI(
-				  paths           = c(gen    = gen_dir,
+				  paths           = c(gen    = file.path(base, "gen"),
 				                      config = config_dir,
-				                      src    = src_dir,
-				                      output = output_dir),
+				                      src    = file.path(base, "src"),
+				                      output = file.path(base, "output")),
 				  hypernode_name  = hypernode,
 				  debug_solver    = FALSE,
 				  i_time          = input$i_time,
@@ -728,13 +767,13 @@ simulationServer <- function(id) {
 				  s_time          = input$s_time,
 				  atol            = input$atol,
 				  rtol            = input$rtol,
-				  fba_fname       = fba_files,
+				  fba_fname       = list.files(file.path(base, "biounits"), "\\.txt$", full.names = TRUE, recursive = TRUE),
 				  user_files      = c(
 				    file.path(config_dir, "population_parameters.csv"),
-				    file.path(gen_dir,    paste0(hypernode, ".fbainfo")),
-				    file.path(output_dir, "ub_bounds_projected_gui.csv"),
-				    file.path(output_dir, "non_projected_forward_bounds_gui.csv"),
-				    file.path(output_dir, "non_projected_reverse_background_met_gui.csv")
+				    file.path(base, "gen",    paste0(hypernode, ".fbainfo")),
+				    file.path(base, "output", "ub_bounds_projected_gui.csv"),
+				    file.path(base, "output", "non_projected_forward_bounds_gui.csv"),
+				    file.path(base, "output", "non_projected_reverse_background_met_gui.csv")
 				  ),
 				  volume = base
 				)
@@ -790,186 +829,322 @@ simulationServer <- function(id) {
 			}, finally = {
 				# ── CLEANUP: remove all _gui files from output, config, and src ─────────
 				try({
-				  # 1) remove GUI-CSV files
-				  unlink(
-				    c(session_files$proj,
-				      session_files$nproj_f,
-				      session_files$nproj_r),
-				    force = TRUE
-				  )
-				  # 2) remove GUI-YAML snapshot
-				  unlink(gui_yaml_path, force = TRUE)
-				  # 3) remove GUI-patched R stub(s)
-				  r_gui_files <- list.files(src_dir, "*_gui\\.R$", full.names = TRUE)
-				  if (length(r_gui_files)) unlink(r_gui_files, force = TRUE)
-				  # 4) remove GUI-patched C++ stub(s)
-				  cpp_gui_files <- list.files(src_dir, "*_gui\\.cpp$", full.names = TRUE)
-				  if (length(cpp_gui_files)) unlink(cpp_gui_files, force = TRUE)
+					# 1) remove GUI-CSV files
+					unlink(c(session_files$proj,
+						       session_files$nproj_f,
+						       session_files$nproj_r),
+						     force = TRUE)
+
+					# 2) remove GUI-YAML snapshot
+					unlink(gui_yaml_path, force = TRUE)
+
+					# 2.1) remove the mu_max CSV
+					unlink(file.path(config_dir, "mu_max_values_gui.csv"), force = TRUE)
+
+					# 3) remove GUI-patched R stub(s) in src
+					src_dir <- file.path(base, "src")
+					r_stubs <- list.files(src_dir, "*_gui\\.R$", full.names = TRUE)
+					if (length(r_stubs)) unlink(r_stubs, force = TRUE)
+
+					# 4) remove GUI-patched C++ stub(s) in src
+					cpp_stubs <- list.files(src_dir, "*_gui\\.cpp$", full.names = TRUE)
+					if (length(cpp_stubs)) unlink(cpp_stubs, force = TRUE)
 				}, silent = TRUE)
 			})  # /tryCatch
 
 		})  # /observeEvent input$btn_run_sim
 
+ 		  # ── modals for each bacteria ─────────────────────────────────────────
+			observe({
+				req(dir_valid())
+				lapply(models(), function(mdl) {
+				  local({
+				    mdl2 <- mdl
 
+				    # Quando si clicca sul nome del modello, apri il modal
+				    observeEvent(input[[paste0("model_", mdl2)]], ignoreInit = TRUE, {
+				      # Snapshot iniziale
+				      info0    <- node_data()[[mdl2]]
+				      params   <- info0$params
+				      pop      <- info0$population
+				      proj     <- info0$projected
+				      unproj_f <- info0$unproj_f
+				      unproj_r <- info0$unproj_r
 
-		
-		 # ── modals for each bacteria ─────────────────────────────────────────
-		observe({
-			req(dir_valid())
-			lapply(models(), function(mdl) {
+				      # ID unici per output e proxy
+				      param_id  <- paste0("param_", mdl2)
+				      proj_id   <- paste0("proj_tbl_", mdl2)
+				      unpr_f_id <- paste0("unpr_f_tbl_", mdl2)
+				      unpr_r_id <- paste0("unpr_r_tbl_", mdl2)
+				      save_id   <- paste0("save_", mdl2)
 
-				observeEvent(input[[paste0("model_", mdl)]], ignoreInit = TRUE, {
-				  info     <- node_data()[[mdl]]
-				  params   <- info$params
-				  proj     <- info$projected
-				  unproj_f <- info$unproj_f
-				  unproj_r <- info$unproj_r
-				  pop      <- info$population
+				      message(paste0("[DEBUG] Opening modal for model: ", mdl2))
 
-				  # unique IDs
-				  proj_id    <- paste0("proj_tbl_", mdl)
-				  unpr_f_id  <- paste0("unpr_f_tbl_", mdl)
-				  unpr_r_id  <- paste0("unpr_r_tbl_", mdl)
-				  save_id    <- paste0("save_", mdl)
-				  param_id   <- paste0("param_", mdl)
-				  pop_id     <- paste0("pop_", mdl)
+				      # Mostra il modal
+				      showModal(
+				      	tags$div(
+									id = "modelDetailModal",  # unique hook
+									tags$head(
+										tags$style(HTML("
+											/* Wrapper specifico per questo modal */
+											#modelDetailModal .modal-content {
+												background-color: #f5f5f5;      /* grigio chiaro */
+												border-radius: 8px;
+												overflow: hidden;
+											}
 
-				  # show modal with three tabs
-				  showModal(
-				    modalDialog(
-				      title     = paste("Model:", mdl),
-				      size      = "l",
-				      easyClose = FALSE,
-				      class     = "modal-model",
-				      tagList(
-				        # params & pop
-				        fluidRow(
-				          column(6,
-				            h4("Parameter recap", class = "modal-section-title"),
-				            tableOutput(ns(param_id))
-				          ),
-				          column(6,
-				            h4("Initial population", class = "modal-section-title"),
-				            verbatimTextOutput(ns(pop_id))
-				          )
-				        ),
-				        hr(class = "modal-divider"),
-				        h4("Exchange reaction bounds", class = "modal-section-title"),
-				        div(class = "modal-tabs",
-				          tabsetPanel(
-				            type = "tabs",
-				            tabPanel(
-				              "Projected",
-				              div(
-				                class = "modal-table-wrapper",
-				                style = "max-height:350px; overflow-y:auto;",
-				                DT::dataTableOutput(ns(proj_id))
-				              )
-				            ),
-				            tabPanel(
-				              "Unprojected Forward",
-				              div(
-				                class = "modal-table-wrapper",
-				                style = "max-height:350px; overflow-y:auto;",
-				                DT::dataTableOutput(ns(unpr_f_id))
-				              )
-				            ),
-				            tabPanel(
-				              "Unprojected Reverse",
-				              div(
-				                class = "modal-table-wrapper",
-				                style = "max-height:350px; overflow-y:auto;",
-				                DT::dataTableOutput(ns(unpr_r_id))
-				              )
-				            )
+											/* Header e footer */
+											#modelDetailModal .modal-header,
+											#modelDetailModal .modal-footer {
+												background-color: #27ae60;      /* verde scuro */
+												color: #ffffff;
+												border: none;
+												padding: 1rem 1.5rem;
+											}
+
+											/* Titolo principale */
+											#modelDetailModal .modal-title {
+												font-size: 2rem;
+												font-weight: 700;
+												text-align: center;
+												position: relative;
+												margin-bottom: 0.5rem;
+												color: #ffffff;
+											}
+											/* Bordo inferiore del titolo */
+											#modelDetailModal .modal-title::after {
+												content: \"\";
+												display: block;
+												width: 80px;
+												height: 4px;
+												background: #2ecc71;            /* verde più chiaro per contrasto */
+												margin: 0.5rem auto 0;          /* centrato */
+												border-radius: 2px;
+											}
+
+											/* Corpo del modal */
+											#modelDetailModal .modal-body {
+												padding: 1.5rem;
+												color: #333333;
+											}
+
+											/* Bottone Close più evidente */
+											#modelDetailModal .btn-default {
+												background-color: transparent;
+												color: #ffffff;
+												border: 1px solid #ffffff;
+											}
+											#modelDetailModal .btn-default:hover {
+												background-color: rgba(255,255,255,0.1);
+											}
+
+											/* Bottone Save */
+											#modelDetailModal .modal-save-btn {
+												background-color: #2ecc71;
+												border-color: #27ae60;
+												color: #ffffff;
+											}
+											#modelDetailModal .modal-save-btn:hover {
+												background-color: #27ae60;
+											}
+										"))
+									),
+				        modalDialog(
+				          title     = paste("Model:", mdl2),
+				          size      = "l",
+				          easyClose = FALSE,
+				          class     = "modal-model modal-model-detail",
+				          
+				        ## ── Initial Biomass input ─────────────────────────────
+				        {
+						        # default: previously saved, or params$bioMean
+						        init_val <- info0$initial_biomass %||% params$bioMean
+						        div(class = "modelgen-subcard",
+												h5("Biomass data", class = "subcard-title"),
+										    fluidRow(
+										      column(6,
+										        numericInput(
+										          ns(paste0("bio_init_", mdl2)),
+										          label = "Initial Biomass",
+										          value = init_val,
+										          min   = 0,
+										          step  = 0.01,
+										          width = "30%"
+										        )
+										      )
+										    )
+										 )
+				        },
+				      	hr(class = "modal-divider"),
+				       ## ── end Initial Biomass ───────────────────────────────
+				          tagList(
+				            # Parametri
+				            div(class = "modelgen-subcard ",
+						          fluidRow(
+						            column(12,
+						              h5("Parameters", class = "subcard-title"),
+						              DT::dataTableOutput(ns(param_id))
+						            )
+						          )
+						        ),
+				            hr(class = "modal-divider"),
+				            # Bounds
+				           div(class = "modelgen-subcard",
+				            	h5("Exchange reaction bounds", class = "subcard-title"),
+						          div(class = "modal-tabs",
+						            tabsetPanel(
+						              type = "tabs",
+						              tabPanel("Projected", DT::dataTableOutput(ns(proj_id))),
+						              tabPanel("Unprojected Forward", DT::dataTableOutput(ns(unpr_f_id))),
+						              tabPanel("Unprojected Reverse", DT::dataTableOutput(ns(unpr_r_id)))
+						            )
+						          )
+						        )
+						      ),
+				          footer = tagList(
+				            modalButton("Close"),
+				            actionButton(ns(save_id), "Save changes", class = "btn-primary")
 				          )
 				        )
-				      ),
-				      footer = tagList(
-				        modalButton("Close"),
-				        actionButton(ns(save_id), "Save changes", class = "btn-primary modal-save-btn")
 				      )
-				    )
-				  )
+				     )
 
-				  # static outputs
-				  output[[param_id]] <- renderTable({
-				    data.frame(
-				      Parameter = names(params),
-				      Value     = unlist(params, use.names = FALSE),
-				      stringsAsFactors = FALSE
-				    )
-				  }, striped = TRUE, hover = TRUE, spacing = "s")
-				  output[[pop_id]] <- renderText(pop)
+				      # Render parametri (server-side)
+				      output[[param_id]] <- DT::renderDataTable({
+				        df <- data.frame(
+				          Parameter = c(names(params), "initial_count"),
+				          Value     = c(unlist(params, use.names = FALSE), pop),
+				          stringsAsFactors = FALSE,
+				          check.names = FALSE
+				        )
+				        DT::datatable(
+				          df,
+				          rownames = FALSE,
+				          editable = list(target = "cell", disable = list(columns = 0)),
+				          options  = list(dom = "t", paging = FALSE, ordering = FALSE)
+				        )
+				      }, server = TRUE)
+				      # Proxy
+				      param_proxy <- DT::dataTableProxy(param_id, session)
+				      
+				   
 
-				  # DataTable options
-				  opts <- list(dom = "ft", paging = FALSE, ordering = FALSE,
-				               scrollY = 300, scrollCollapse = TRUE)
-				  lock <- list(target = "cell", disable = list(columns = c(0)))
+				      # Edit parametri
+				      observeEvent(input[[paste0(param_id, "_cell_edit")]], ignoreInit = TRUE, {
+				        edit    <- input[[paste0(param_id, "_cell_edit")]]
+				        row     <- edit$row
+				        new_val <- suppressWarnings(as.numeric(edit$value))
+				        message(paste0("[DEBUG] Param edit mdl=", mdl2, " row=", row, " val=", edit$value))
+				        if (is.na(new_val)) {
+				          showNotification("Valore non numerico!", type = "error")
+				          return()
+				        }
+				        isolate({
+				          nd     <- node_data()
+				          info1  <- nd[[mdl2]]
+				          fields <- c(names(info1$params), "initial_count")
+				          name   <- fields[row]
+				          if (name %in% names(info1$params)) {
+				            info1$params[[name]] <- new_val
+				          } else {
+				            info1$population <- new_val
+				          }
+				          nd[[mdl2]] <- info1
+				          node_data(nd)
+				        })
+				        # Refresh
+				        upd <- node_data()[[mdl2]]
+				        df2 <- data.frame(
+				          Parameter = c(names(upd$params), "initial_count"),
+				          Value     = c(unlist(upd$params, use.names = FALSE), upd$population),
+				          stringsAsFactors = FALSE,
+				          check.names = FALSE
+				        )
+				        DT::replaceData(param_proxy, df2, resetPaging = FALSE, rownames = FALSE)
+				      })
 
-				  # render each table
-				  output[[proj_id]]   <- DT::renderDataTable({ DT::datatable(proj,     rownames = FALSE, editable = lock, options = opts) })
-				  output[[unpr_f_id]] <- DT::renderDataTable({ DT::datatable(unproj_f, rownames = FALSE, editable = lock, options = opts) })
-				  output[[unpr_r_id]] <- DT::renderDataTable({ DT::datatable(unproj_r, rownames = FALSE, editable = lock, options = opts) })
+				      # Bounds tables options
+				      opts <- list(dom = "ft", paging = FALSE, ordering = FALSE, scrollY = 300, scrollCollapse = TRUE)
+				      lock <- list(target = "cell", disable = list(columns = 0))
+				      # Render bounds
+				      output[[proj_id]]   <- DT::renderDataTable({ DT::datatable(proj,     rownames = FALSE, editable = lock, options = opts) })
+				      output[[unpr_f_id]] <- DT::renderDataTable({ DT::datatable(unproj_f, rownames = FALSE, editable = lock, options = opts) })
+				      output[[unpr_r_id]] <- DT::renderDataTable({ DT::datatable(unproj_r, rownames = FALSE, editable = lock, options = opts) })
+				      # Proxies
+				      proj_proxy   <- DT::dataTableProxy(proj_id, session)
+				      unpr_f_proxy <- DT::dataTableProxy(unpr_f_id, session)
+				      unpr_r_proxy <- DT::dataTableProxy(unpr_r_id, session)
 
-				  # proxies for editing
-				  proj_proxy   <- DT::dataTableProxy(proj_id,   session = session)
-				  unpr_f_proxy <- DT::dataTableProxy(unpr_f_id, session = session)
-				  unpr_r_proxy <- DT::dataTableProxy(unpr_r_id, session = session)
+				      # Edit projected
+				      observeEvent(input[[paste0(proj_id, "_cell_edit")]], ignoreInit = TRUE, {
+				        ed  <- input[[paste0(proj_id, "_cell_edit")]]
+				        row <- ed$row; col <- ed$col + 1
+				        message(paste0("[DEBUG] Bounds proj mdl=", mdl2, " row=", row, " col=", col, " val=", ed$value))
+				        isolate({
+				          nd      <- node_data()
+				          info2   <- nd[[mdl2]]
+				          info2$projected[row, col] <- as.numeric(ed$value)
+				          nd[[mdl2]] <- info2
+				          node_data(nd)
+				        })
+				        DT::replaceData(proj_proxy, node_data()[[mdl2]]$projected, resetPaging = FALSE, rownames = FALSE)
+				        rebuild_bounds_csv(session_files$proj, "projected")
+				      })
 
-				  # projected edits
-				  observeEvent(input[[paste0(proj_id, "_cell_edit")]], ignoreInit = TRUE, {
-				    edit <- input[[paste0(proj_id, "_cell_edit")]]
-				    proj[edit$row, edit$col + 1] <<- as.numeric(edit$value)
+				      # Edit forward
+				      observeEvent(input[[paste0(unpr_f_id, "_cell_edit")]], ignoreInit = TRUE, {
+				        ed  <- input[[paste0(unpr_f_id, "_cell_edit")]]
+				        row <- ed$row; col <- ed$col + 1
+				        message(paste0("[DEBUG] Bounds fwd mdl=", mdl2, " row=", row, " col=", col, " val=", ed$value))
+				        isolate({
+				          nd      <- node_data()
+				          info3   <- nd[[mdl2]]
+				          info3$unproj_f[row, col] <- as.numeric(ed$value)
+				          nd[[mdl2]] <- info3
+				          node_data(nd)
+				        })
+				        DT::replaceData(unpr_f_proxy, node_data()[[mdl2]]$unproj_f, resetPaging = FALSE, rownames = FALSE)
+				        rebuild_bounds_csv(session_files$nproj_f, "unproj_f")
+				      })
 
-				    info$projected <- proj
-				    tmp <- node_data(); tmp[[mdl]] <- info; node_data(tmp)
+				      # Edit reverse
+				      observeEvent(input[[paste0(unpr_r_id, "_cell_edit")]], ignoreInit = TRUE, {
+				        ed  <- input[[paste0(unpr_r_id, "_cell_edit")]]
+				        row <- ed$row; col <- ed$col + 1
+				        message(paste0("[DEBUG] Bounds rev mdl=", mdl2, " row=", row, " col=", col, " val=", ed$value))
+				        isolate({
+				          nd      <- node_data()
+				          info4   <- nd[[mdl2]]
+				          info4$unproj_r[row, col] <- as.numeric(ed$value)
+				          nd[[mdl2]] <- info4
+				          node_data(nd)
+				        })
+				        DT::replaceData(unpr_r_proxy, node_data()[[mdl2]]$unproj_r, resetPaging = FALSE, rownames = FALSE)
+				        rebuild_bounds_csv(session_files$nproj_r, "unproj_r")
+				      })
 
-				    DT::replaceData(proj_proxy, proj, resetPaging = FALSE, rownames = FALSE)
-				    rebuild_bounds_csv(session_files$proj, "projected")
-				  })
+							# ── Save changes button ─────────────────────────────────
+							observeEvent(input[[save_id]], ignoreInit = TRUE, {
+								# 1) grab the new initial biomass
+								ib_id   <- paste0("bio_init_", mdl2)
+								new_bio <- input[[ib_id]]
+								if (!is.null(new_bio)) {
+									nd         <- node_data()
+									info_sav   <- nd[[mdl2]]
+									info_sav$initial_biomass <- new_bio
+									nd[[mdl2]] <- info_sav
+									node_data(nd)
+									message("[DEBUG] Saved initial_biomass for ", mdl2, " = ", new_bio)
+								}
+								# 2) close modal
+								removeModal()
+							})
 
-				  # forward unprojected edits
-				  observeEvent(input[[paste0(unpr_f_id, "_cell_edit")]], ignoreInit = TRUE, {
-				    edit <- input[[paste0(unpr_f_id, "_cell_edit")]]
-				    unproj_f[edit$row, edit$col + 1] <<- as.numeric(edit$value)
+				    }) # end observeEvent(model_<mdl2>)
+				  })   # end local
+				})     # end lapply(models())
+			})       # end observe()
 
-				    info$unproj_f <- unproj_f
-				    tmp <- node_data(); tmp[[mdl]] <- info; node_data(tmp)
-
-				    DT::replaceData(unpr_f_proxy, unproj_f, resetPaging = FALSE, rownames = FALSE)
-				    rebuild_bounds_csv(session_files$nproj_f, "unproj_f")
-				  })
-
-					# reverse unprojected edits
-					observeEvent(input[[paste0(unpr_r_id, "_cell_edit")]], ignoreInit = TRUE, {
-						edit <- input[[paste0(unpr_r_id, "_cell_edit")]]
-						# update in-memory table
-						unproj_r[edit$row, edit$col + 1] <<- as.numeric(edit$value)
-
-						# write back to node_data
-						info$unproj_r <- unproj_r
-						tmp          <- node_data()
-						tmp[[mdl]]   <- info
-						node_data(tmp)
-
-						# update the DT in the UI
-						DT::replaceData(unpr_r_proxy, unproj_r, resetPaging = FALSE, rownames = FALSE)
-
-						# rebuild the reverse CSV
-						rebuild_bounds_csv(session_files$nproj_r, "unproj_r")
-					})
-
-
-				  # save button
-				  observeEvent(input[[save_id]], ignoreInit = TRUE, {
-				    removeModal()
-				    showNotification("Bounds saved to GUI files.", id = "boundsToast", type = "message", duration = 3)
-				  })
-
-				})  # /observeEvent model_<mdl>
-			})    # /lapply(models())
-		})      # /observe
 
 
 		# 1) When user clicks “Save Configuration…”, ask for a name
@@ -1010,17 +1185,13 @@ simulationServer <- function(id) {
 			}
 			dir.create(save_dir)
 			
-			# copy the GUI temps
-			file.copy(session_files$proj,
-				        file.path(save_dir, basename(session_files$proj)))
-			file.copy(session_files$nproj_f,
-				        file.path(save_dir, basename(session_files$nproj_f)))
-			file.copy(session_files$nproj_r,
-				        file.path(save_dir, basename(session_files$nproj_r)))
+			# copy the GUI-temp CSVs
+			file.copy(session_files$proj,    file.path(save_dir, basename(session_files$proj)))
+			file.copy(session_files$nproj_f, file.path(save_dir, basename(session_files$nproj_f)))
+			file.copy(session_files$nproj_r, file.path(save_dir, basename(session_files$nproj_r)))
 			
-			# snapshot all inputs
-			# Times & tolerances
-			cfg_list <- list(
+			# 1) snapshot dei tempi e tolleranze
+			cfg <- list(
 				times = list(
 				  initial_time = input$i_time,
 				  final_time   = input$f_time,
@@ -1031,32 +1202,54 @@ simulationServer <- function(id) {
 				  rtol = input$rtol
 				)
 			)
-			# boundary metabolites (YAML order)
-			yml_f   <- list.files(file.path(base_dir, "config"), "\\.ya?ml$", full.names=TRUE)[1]
+			
+			# 2) snapshot concentrazioni boundary
+			yml_f   <- list.files(file.path(base_dir,"config"), "\\.ya?ml$", full.names=TRUE)[1]
 			yml     <- if (length(yml_f)) yaml::read_yaml(yml_f) else list()
 			bm_defs <- yml$boundary_metabolites %||% character()
-			met_ids <- gsub("[^A-Za-z0-9_]", "_", bm_defs)
-			cfg_list$boundary_concentrations <- setNames(
-				lapply(met_ids, function(id) input[[paste0("conc_", id)]]),
-				bm_defs
-			)
-			# system params
-			cfg_list$system_parameters <- list(
+			if (length(bm_defs)) {
+				met_ids <- gsub("[^A-Za-z0-9_]","_", bm_defs)
+				cfg$boundary_concentrations <- setNames(
+				  lapply(met_ids, function(id) input[[paste0("conc_", id)]]),
+				  bm_defs
+				)
+			}
+			
+			# 3) snapshot system parameters
+			cfg$system_parameters <- list(
 				fba_upper_bound = input$fba_ub,
 				fba_lower_bound = input$fba_lb,
 				background_met  = input$background_met,
 				volume          = input$sys_volume,
 				cell_density    = input$cell_density
 			)
-			# write JSON
-			jsonlite::write_json(cfg_list,
+			
+			# 4) snapshot dei parametri, popolazioni e initial_biomass per ogni modello
+			nd <- node_data()
+			cfg$models <- lapply(names(nd), function(mdl) {
+				info <- nd[[mdl]]
+				list(
+					model_name      = mdl,
+					parameters      = info$params,
+					population      = info$population,
+					initial_biomass = info$initial_biomass  
+				)
+			})
+
+			
+			# 5) scrivi il JSON di compatibilità (già esistente)
+			jsonlite::write_json(cfg,
 				                   file.path(save_dir, "config_values.json"),
 				                   auto_unbox = TRUE, pretty = TRUE)
 			
-			# finish
+			# 6) scrivi anche un file YAML
+			yaml::write_yaml(cfg, 
+				               file.path(save_dir, paste0("config_", cfg_name, ".yaml")))
+			
 			removeModal()
 			showNotification(paste("Configuration saved as", cfg_name), type="message")
 		})
+
 
 		# 1) When user clicks “Load Configuration…”, show modal with available configs
 		observeEvent(input$load_configuration, {
@@ -1157,35 +1350,29 @@ simulationServer <- function(id) {
 			))
 		})
 
-		# —————————————————————————————————————————————————————————————
-		# 2) Load & apply
-		# —————————————————————————————————————————————————————————————
+		# ──────────────────────────────────────────────────────────────────────────────
+		# 2) Load & apply saved configuration
+		# ──────────────────────────────────────────────────────────────────────────────
 		observeEvent(input$confirm_load_config, {
-			message("[LOAD] confirm_load_config")
 			req(input$choose_config)
-
 			cfg_name <- input$choose_config
 			base_dir <- shinyFiles::parseDirPath(roots, input$hypernode_dir)
 			load_dir <- file.path(base_dir, "settings", cfg_name)
-			message("[LOAD] load_dir = ", load_dir)
 
-			# Copy GUI CSVs
+			# Copy GUI-temp CSVs
 			for (slot in c("proj","nproj_f","nproj_r")) {
 				dest <- session_files[[slot]]
 				src  <- file.path(load_dir, basename(dest))
-				message("[LOAD] copying ", src, " → ", dest)
-				ok <- file.copy(from=src, to=dest, overwrite=TRUE)
-				message("[LOAD] copy ", slot, " ok? ", ok)
+				file.copy(from = src, to = dest, overwrite = TRUE)
 			}
 
-			# Rebuild node_data (assuming make_bounds_* already in scope)
-			proj_df    <- if (file.exists(session_files$proj))    read.csv(session_files$proj,  stringsAsFactors=FALSE) else data.frame()
-			nproj_f_df <- if (file.exists(session_files$nproj_f)) read.csv(session_files$nproj_f, stringsAsFactors=FALSE) else data.frame()
-			nproj_r_df <- if (file.exists(session_files$nproj_r)) read.csv(session_files$nproj_r, stringsAsFactors=FALSE) else data.frame()
+			# Rebuild node_data from the bounds
+			proj_df    <- if (file.exists(session_files$proj))    read.csv(session_files$proj,  stringsAsFactors = FALSE) else data.frame()
+			nproj_f_df <- if (file.exists(session_files$nproj_f)) read.csv(session_files$nproj_f, stringsAsFactors = FALSE) else data.frame()
+			nproj_r_df <- if (file.exists(session_files$nproj_r)) read.csv(session_files$nproj_r, stringsAsFactors = FALSE) else data.frame()
 
 			models_list <- models()
 			info_list <- lapply(models_list, function(mdl) {
-				message("[LOAD] rebuild model ", mdl)
 				list(
 				  params     = node_data()[[mdl]]$params,
 				  population = node_data()[[mdl]]$population,
@@ -1196,52 +1383,58 @@ simulationServer <- function(id) {
 			})
 			names(info_list) <- models_list
 			node_data(info_list)
-			message("[LOAD] node_data rebuilt")
 
-			# Load JSON and update inputs (bare IDs!)
+			# ——— LEGGO IL JSON SENZA simplifyVector ———————————
 			json_path <- file.path(load_dir, "config_values.json")
 			if (file.exists(json_path)) {
-				vals <- jsonlite::fromJSON(json_path, simplifyVector=TRUE)
-				message("[LOAD] JSON loaded")
+				vals <- jsonlite::fromJSON(json_path, simplifyVector = FALSE)
 
-				# times & tolerances
-				updateNumericInput(session, "i_time", value=vals$times$initial_time)
-				updateNumericInput(session, "f_time", value=vals$times$final_time)
-				updateNumericInput(session, "s_time", value=vals$times$step_size)
-				updateNumericInput(session, "atol",   value=vals$tolerances$atol)
-				updateNumericInput(session, "rtol",   value=vals$tolerances$rtol)
-				message("[LOAD] times/tolerances updated")
+				# 1) Ripristino tempi & tolleranze
+				updateNumericInput(session, "i_time", value = vals$times$initial_time)
+				updateNumericInput(session, "f_time", value = vals$times$final_time)
+				updateNumericInput(session, "s_time", value = vals$times$step_size)
+				updateNumericInput(session, "atol",   value = vals$tolerances$atol)
+				updateNumericInput(session, "rtol",   value = vals$tolerances$rtol)
 
-				# boundary concentrations
-				yml_f   <- list.files(file.path(base_dir,"config"), "\\.ya?ml$", full.names=TRUE)[1]
+				# 2) Boundary concentrations
+				yml_f   <- list.files(file.path(base_dir, "config"), "\\.ya?ml$", full.names = TRUE)[1]
 				yml     <- if (length(yml_f)) yaml::read_yaml(yml_f) else list()
 				bm_defs <- yml$boundary_metabolites %||% character()
-				met_ids <- gsub("[^A-Za-z0-9_]","_", bm_defs)
+				met_ids <- gsub("[^A-Za-z0-9_]", "_", bm_defs)
 				for (i in seq_along(bm_defs)) {
-				  input_id <- paste0("conc_", met_ids[i])
-				  val      <- vals$boundary_concentrations[[ bm_defs[i] ]]
-				  updateNumericInput(session, input_id, value=val)
-				  message("[LOAD] conc ", bm_defs[i], " → ", val)
+				  updateNumericInput(
+				    session,
+				    paste0("conc_", met_ids[i]),
+				    value = vals$boundary_concentrations[[ bm_defs[i] ]]
+				  )
 				}
 
-				# system parameters
+				# 3) System parameters
 				sp <- vals$system_parameters
-				updateNumericInput(session, "fba_ub",       value=sp$fba_upper_bound)
-				updateNumericInput(session, "fba_lb",       value=sp$fba_lower_bound)
-				updateNumericInput(session, "background_met",value=sp$background_met)
-				updateNumericInput(session, "sys_volume",   value=sp$volume)
-				updateNumericInput(session, "cell_density", value=sp$cell_density)
-				message("[LOAD] system parameters updated")
-			} else {
-				message("[LOAD] config_values.json missing")
+				updateNumericInput(session, "fba_ub",        value = sp$fba_upper_bound)
+				updateNumericInput(session, "fba_lb",        value = sp$fba_lower_bound)
+				updateNumericInput(session, "background_met", value = sp$background_met)
+				updateNumericInput(session, "sys_volume",    value = sp$volume)
+				updateNumericInput(session, "cell_density",  value = sp$cell_density)
+
+				# 4) Ripristino params, population e initial_biomass nei modal
+				if (!is.null(vals$models)) {
+					nd <- node_data()
+					for (m in vals$models) {
+						mdl <- m$model_name
+						if (mdl %in% names(nd)) {
+							nd[[mdl]]$params           <- m$parameters
+							nd[[mdl]]$population       <- m$population
+							nd[[mdl]]$initial_biomass  <- m$initial_biomass  # ← restore starting biomass
+						}
+					}
+					node_data(nd)
+				}
 			}
 
 			removeModal()
-			showNotification(paste("Loaded configuration:", cfg_name), type="message")
+			showNotification(paste("Loaded configuration:", cfg_name), type = "message")
 		})
-
-
-
 
 
 		# ── 5) Handle modal choices ────────────────────────────────────────────────
