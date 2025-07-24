@@ -29,6 +29,26 @@ modelGenServer <- function(id) {
 
 
     ns <- session$ns
+		project_root <- getOption("epimodFBAfunctionsGUI.user_proj",
+				                      normalizePath("~"))
+		roots <- c(Home = "~", Project = project_root)
+
+		shinyFiles::shinyDirChoose(
+			input  = input,
+			id     = "work_dir",
+			roots  = roots,
+			session = session,
+			defaultRoot = "Project",
+			defaultPath = ""
+		)
+		shinyFiles::shinyDirChoose(
+			input  = input,
+			id     = "mat_dir",
+			roots  = roots,
+			session = session,
+			defaultRoot = "Project",
+			defaultPath = ""
+		)
 
     # ---- new reactive vals for step 1 inputs -----------------------
     hypernode_name <- shiny::reactiveVal(NULL)
@@ -70,15 +90,30 @@ modelGenServer <- function(id) {
     current    <- shiny::reactiveVal(1)
     meta_cache <- shiny::reactiveVal(list())
 
+
+		# ── lookup: label  → id modello  --------------------------------------------
+		label2id <- reactive({
+			cfgs <- unit_cfgs()
+			if (!length(cfgs)) return(setNames(character(), character()))
+			labs <- vapply(cfgs, `[[`, character(1), "label")
+			ids  <- vapply(cfgs, `[[`, character(1), "model_name")
+			# NB: assicurati che le label siano univoche
+			if (any(duplicated(labs)))
+				warning("Duplicated model labels detected! Adjust labels to be unique.")
+			setNames(ids, labs)        # names = label, value = id
+		})
+
+
 		global_cfg <- shiny::reactiveVal(list(
-			biomass           = list(max = 1, mean = 1, min = 0),
-			population        = list(starv = 0, dup = 1, death = 0),
-			volume            = 0.001,
-			cell_density      = 1e10,
-			initial_count     = 1e6,
-			fba_upper_bound   = 1000,
-			fba_lower_bound   = -1000,
-			background_met    = 1000
+			biomass                    = list(max = 1, mean = 1, min = 0),
+			population                 = list(starv = 0, dup = 1, death = 0),
+			volume                     = 0.001,
+			cell_density               = 1e10,
+			initial_count              = 1e6,
+			projected_lower_bound      = 1000,
+			projected_upper_bound      = 1000,
+			not_projected_lower_bound  = 1000,
+			not_projected_upper_bound  = 1000
 		))
 
     
@@ -127,77 +162,67 @@ modelGenServer <- function(id) {
 		})
 
     
-		project_root <- getOption("epimodFBAfunctionsGUI.user_proj",
-				                      normalizePath("~"))
-		                        
-		                        
-    # ---- 3) folder choosers (shinyFiles) ----------------------------
-    roots <- c(Home = "~", Project = project_root)
-    shinyFiles::shinyDirChoose(
-      input, id = "work_dir", roots = roots,
-      defaultRoot = "Project", defaultPath = "."
-    )
-    shinyFiles::shinyDirChoose(
-      input, id = "mat_dir", roots = roots,
-      defaultRoot = "Project", defaultPath = "."
-    )
 
-		# ── top card: choose / show directories ──────────────────────────────────────
+		#──────────────────────────────────────────────────────────────────────────────
+		#  TOP CARD  (directory picker + hypernode name)  —  UI REATTIVA
+		#──────────────────────────────────────────────────────────────────────────────
 		output$top_card <- renderUI({
+
 			wd_ok  <- work_valid()
 			md_ok  <- mat_valid()
 			loaded <- length(unit_cfgs()) > 0
 			reset  <- reset_flag(); if (reset) reset_flag(FALSE)
 
-			#─────────────────────────  STATE ➊
+			#──────────────   STATO ➊  (dopo il caricamento modelli)   ──────────────
 			if (loaded && !is.null(working_dir()) && !is.null(matfile_dir())) {
 
-				wd_lbl  <- basename(working_dir() %||% "")
-				mat_lbl <- basename(matfile_dir() %||% "")
-				hyper_nodename <- basename(hypernode_name() %||% "")
+				wd_lbl  <- basename(working_dir()  %||% "")
+				mat_lbl <- basename(matfile_dir()  %||% "")
+				hyper_nodename <- basename(isolate(hypernode_name()) %||% "")
 
 				div(class = "sim-section-card directory",
 				  h4(icon("folder-open"), "Selected Directories", class = "sim-section-title"),
 
 				  div(class = "selected-dir d-flex align-items-center mb-2",
-				      strong("Working:", class = "me-2 text-secondary"),
-				      span(wd_lbl, class = "badge bg-primary fs-6")
+				    strong("Working:", class = "me-2 text-secondary"),
+				    span(wd_lbl,  class = "badge bg-primary fs-6")
 				  ),
 				  div(class = "selected-dir d-flex align-items-center",
-				      strong("MAT:", class = "me-2 text-secondary"),
-				      span(mat_lbl, class = "badge bg-primary fs-6")
+				    strong("MAT:", class = "me-2 text-secondary"),
+				    span(mat_lbl, class = "badge bg-primary fs-6")
 				  ),
 				  div(class = "selected-dir d-flex align-items-center",
-				      strong("Hypernode:", class = "me-2 text-secondary"),
-				      span(hyper_nodename, class = "badge bg-primary fs-6")
+				    strong("Hypernode:", class = "me-2 text-secondary"),
+				    span(hyper_nodename, class = "badge bg-primary fs-6")
 				  ),
 				  div(class = "mt-3 text-right",
-				      actionButton(ns("btn_reset_dirs"), NULL,
-				                   icon = icon("redo"),
-				                   class = "btn-reset-sim")
+				    actionButton(ns("btn_reset_dirs"), NULL,
+				      icon  = icon("redo"),
+				      class = "btn-reset-sim")
 				  )
 				)
 
+			#──────────────   STATO ➋  (inizializzazione)   ──────────────
 			} else {
+
 				div(class = "sim-section-card directory",
 				  h4(icon("folder-open"), "Initialize Hypernode", class = "sim-section-title"),
 
-				  # Hypernode name
+				  ## Campo nome hypernode – isolate() evita il refresh a ogni tasto
 				  div(class = "mb-4",
-						textInput(
-							ns("hypernode_name"),
-							"Hypernode Name",
-							value       = hypernode_name(),
-							placeholder = "Enter unique name for this run",
-							width       = "40%"
-						)
-
+				    textInput(
+				      ns("hypernode_name"),
+				      "Hypernode Name",
+				      value       = isolate(hypernode_name()),
+				      placeholder = "Enter unique name for this run",
+				      width       = "40%"
+				    )
 				  ),
 
-				  # Pickers / badges row
+				  ## RIGA bottoni / badge
 				  div(class = "d-flex flex-wrap align-items-end gap-4 mt-4",
 
-				    ## Working-dir control
+				    # Working dir
 				    if (wd_ok)
 				      div(class = "selected-dir flex-grow-1",
 				        strong("Working:", class = "me-2 text-secondary"),
@@ -212,7 +237,7 @@ modelGenServer <- function(id) {
 				        class = "btn btn-primary shinyDirButton flex-grow-1"
 				      ),
 
-				    ## MAT-dir control
+				    # MAT dir
 				    if (md_ok)
 				      div(class = "selected-dir flex-grow-1",
 				        strong("MAT:", class = "me-2 text-secondary"),
@@ -226,16 +251,19 @@ modelGenServer <- function(id) {
 				        icon  = icon("folder-open"),
 				        class = "btn btn-primary shinyDirButton flex-grow-1"
 				      ),
-				    ## Reset (right) – when any dir chosen
+
+				    # Bottone reset
 				    if (wd_ok || md_ok)
 				      div(class = "mt-3 text-right",
 				        actionButton(
-				          ns("btn_reset_dirs"), NULL,
+				          ns("btn_reset_dirs"),
+				          NULL,
 				          icon  = icon("redo"),
 				          class = "btn-reset-sim align-self-center"
 				        )
 				      ),
-				    				    ## Load Models (left) – only when both dirs valid
+
+				    # «Load models» (solo se entrambe le cartelle sono valide)
 				    if (wd_ok && md_ok)
 				      div(class = "mt-3",
 				        actionButton(
@@ -243,78 +271,64 @@ modelGenServer <- function(id) {
 				          icon  = icon("play"),
 				          class = "btn btn-success px-4 align-self-center"
 				        )
-				      ),
+				      )
 				  )
 				)
 			}
 		})
 
-
-
-		# ── 3a) validate Working directory ------------------------------------------
-		observeEvent(input$work_dir, {
+		# ── 3a) validate Working directory ----------------------------------------
+		observeEvent(input$work_dir, ignoreInit = TRUE, {
+			# NB: shinyFiles invia più eventi durante la navigazione;  
+			#     ci interessano solo quelli in cui l’utente ha cliccato “Select”.
+			req(is.list(input$work_dir))             # scarta NULL
 			p <- shinyFiles::parseDirPath(roots, input$work_dir)
-
-			## nothing picked yet
-			if (!length(p) || !nzchar(p)) return()
+			req(length(p) == 1, nzchar(p))           # scarta eventi intermedi ""
 
 			if (dir.exists(p)) {
 				working_dir(p)
 				work_valid(TRUE)
 			} else {
-				work_valid(FALSE)
-				shiny::showNotification(
-				  "The selected working directory is not valid.",
+				showNotification(
+				  "La cartella di lavoro selezionata non esiste.",
 				  type = "error", duration = 4
 				)
+				work_valid(FALSE)
 			}
 		})
 
-		# ── 3b) validate MAT directory (must contain at least one *.mat) -------------
-		observeEvent(input$mat_dir, {
+		# ── 3b) validate MAT directory -------------------------------------------
+		observeEvent(input$mat_dir, ignoreInit = TRUE, {
+			req(is.list(input$mat_dir))
 			p <- shinyFiles::parseDirPath(roots, input$mat_dir)
-
-			## nothing picked yet
-			if (!length(p) || !nzchar(p)) return()
+			req(length(p) == 1, nzchar(p))           # scarta eventi intermedi
 
 			if (!dir.exists(p)) {
-				mat_valid(FALSE)
-				shiny::showNotification(
-				  "The selected MAT-file directory does not exist.",
+				showNotification(
+				  "La cartella MAT selezionata non esiste.",
 				  type = "error", duration = 4
 				)
-				return()
-			}
-
-			has_mat <- length(list.files(p, pattern = "\\.mat$", ignore.case = TRUE)) > 0
-			if (!has_mat) {
 				mat_valid(FALSE)
-
-				showModal(
-					modalDialog(
-						title     = "Error: No .mat Files Found",
-						tagList(
-						  div(style="text-align:center;",
-						      img(src="error.png", height="400px", alt="Error")
-						  ),
-						  br(),
-						  div("The selected folder contains no .mat files. Please choose a different directory.",
-						      style="text-align:center; color:red;")
-						),
-						easyClose = TRUE,
-						footer    = modalButton("OK"),
-						size = "l"
-					)
-				)
-
 				return()
 			}
 
+			if (length(list.files(p, pattern = "\\.mat$", ignore.case = TRUE)) == 0) {
+				showModal(
+				  modalDialog(
+				    title     = "Nessun file .mat trovato",
+				    "La cartella scelta non contiene file .mat validi.",
+				    easyClose = TRUE, footer = modalButton("OK")
+				  )
+				)
+				mat_valid(FALSE)
+				return()
+			}
 
-			## everything is fine
+			# tutto ok
 			matfile_dir(p)
 			mat_valid(TRUE)
 		})
+
 
 		# ── 3c) “Reset” button ↺ -----------------------------------------------------
 		observeEvent(input$btn_reset_dirs, {
@@ -490,22 +504,26 @@ modelGenServer <- function(id) {
 		output$bmeta_list <- renderUI({
 			req(all_boundaries())
 
-			search   <- tolower(trimws(input$bsearch %||% ""))
-			sel_mod  <- input$model_filter %||% "All"
+			search  <- tolower(trimws(input$bsearch %||% ""))
+			sel_lab <- input$model_filter %||% "All"     # ← sono label, non id
 
 			df <- all_boundaries()
 
-			## ── NEW FILTER LOGIC ───────────────────────────────────────────────
-			if (!("All" %in% sel_mod)) {
-				keep <- vapply(df$species, function(spstr){
-				  mods <- trimws(strsplit(spstr, ",")[[1]])
+			## ----------- FILTRO PER MODELLO -----------------------------------------
+			if (!("All" %in% sel_lab)) {
 
-				  if (length(sel_mod) == 1) {
-				    ## unique metabolites of one model
-				    length(mods) == 1 && identical(mods, sel_mod)
+				# converto le label selezionate nei rispettivi id
+				sel_id <- unname(label2id()[sel_lab])
+
+				keep <- vapply(df$species, function(spstr) {
+				  mods <- trimws(strsplit(spstr, ",")[[1]])   # ← id presenti nel metabolita
+
+				  if (length(sel_id) == 1) {
+				    ## metaboliti presenti SOLO in quel modello
+				    length(mods) == 1 && identical(mods, sel_id)
 				  } else {
-				    ## metabolites shared by exactly the selected models
-				    length(mods) == length(sel_mod) && setequal(mods, sel_mod)
+				    ## metaboliti condivisi ESATTAMENTE dai modelli scelti
+				    length(mods) == length(sel_id) && setequal(mods, sel_id)
 				  }
 				}, logical(1))
 
@@ -734,30 +752,41 @@ global_settings_card <- div(
     )
   ),
   
-# ── System Parameters ─────────────────────────────────────────────
-  div(class = "modelgen-global__section mb-3",
-    h5("System Parameters"),
-    fluidRow(
-      column(4,
-        numericInput(
-          ns("global_fba_ub"), "FBA Upper Bound (mmol/h)",
-          value = isolate(global_cfg()$fba_upper_bound), min = 0, width = "100%"
-        )
-      ),
-      column(4,
-        numericInput(
-          ns("global_fba_lb"), "FBA Lower Bound (mmol/h)",
-          value = isolate(global_cfg()$fba_lower_bound), width = "100%"
-        )
-      ),
-      column(4,
-        numericInput(
-          ns("global_background_met"), "Background met (mmol)",
-          value = isolate(global_cfg()$background_met), min = 0, width = "100%"
-        )
-      )
-    )
-  )
+	# ── System Parameters ─────────────────────────────────────────────
+	div(class = "modelgen-global__section mb-3",
+		h5("System Parameters"),
+		fluidRow(
+		  column(3,
+		    numericInput(
+		      ns("global_proj_lb"),  "Projected Lower Bound (mmol/h)",
+		      value = isolate(global_cfg()$projected_lower_bound),
+		      min   = 0, width = "100%"
+		    )
+		  ),
+		  column(3,
+		    numericInput(
+		      ns("global_proj_ub"),  "Projected Upper Bound (mmol/h)",
+		      value = isolate(global_cfg()$projected_upper_bound),
+		      min   = 0, width = "100%"
+		    )
+		  ),
+		  column(3,
+		    numericInput(
+		      ns("global_nproj_lb"), "Non-projected Lower Bound (mmol/h)",
+		      value = isolate(global_cfg()$not_projected_lower_bound),
+		      min   = 0, width = "100%"
+		    )
+		  ),
+		  column(3,
+		    numericInput(
+		      ns("global_nproj_ub"), "Non-projected Upper Bound (mmol/h)",
+		      value = isolate(global_cfg()$not_projected_upper_bound),
+		      min   = 0, width = "100%"
+		    )
+		  )
+		)
+	)
+
 )
 
 		
@@ -802,9 +831,9 @@ global_settings_card <- div(
 				),
 
 				# Preview YAML (mostrato solo dopo la generazione)
-				div(class = "mt-4",
-					verbatimTextOutput(ns("cfg_yaml"))
-				)
+				#div(class = "mt-4",
+				#	verbatimTextOutput(ns("cfg_yaml"))
+				#)
 			)
 
 
@@ -833,214 +862,223 @@ global_settings_card <- div(
 			)
 		})
 
+## ---- 7) Respond to clicks → inject modal content ----------------------
+observe({
+  models <- unit_cfgs()      # per-model configs
+  meta   <- meta_cache()     # metadata from CSV
 
-			# ---- 7) Respond to clicks → inject modal content ----------------------
-		observe({
-			models <- unit_cfgs()      # per-model configs
-			meta   <- meta_cache()     # metadata from CSV
+  lapply(seq_along(models), function(i) {
+    local({
 
-			## create a modal for each loaded model ---------------------------
-			lapply(seq_along(models), function(i) {
-				local({
-				  my_i    <- i                      # freeze index
-				  cfg_now <- models[[my_i]]         # current config
+      my_i    <- i
+      cfg_now <- models[[my_i]]
 
-				  base_id <- paste0("m", my_i, "_") # unique prefix
-				  id_raw  <- function(suff) paste0(base_id, suff)
+      ## id helpers -------------------------------------------------------
+      base_id <- paste0("m", my_i, "_")
+      id_raw  <- function(suff) paste0(base_id, suff)
 
-				  tbl_meta <- id_raw("tbl_meta")
-				  tbl_rxn  <- id_raw("tbl_rxn")
-				  tbl_bnd  <- id_raw("tbl_bnd")
-				  save_raw <- id_raw("save")
+      tbl_meta <- id_raw("tbl_meta")
+      tbl_rxn  <- id_raw("tbl_rxn")
+      tbl_bnd  <- id_raw("tbl_bnd")
+      save_raw <- id_raw("save")
 
-				  ## ---------- SAVE button --------------------------------------
-				  observeEvent(input[[save_raw]], ignoreInit = TRUE, {
-				    cfgs <- unit_cfgs()  # copy global state
+      ## ---------------- SAVE button ------------------------------------
+      observeEvent(input[[save_raw]], ignoreInit = TRUE, {
+        cfgs <- unit_cfgs()
 
-				    # Biomass settings
-				    cfgs[[my_i]]$biomass$max  <- input[[id_raw("bmax")]]
-				    cfgs[[my_i]]$biomass$mean <- input[[id_raw("bmean")]]
-				    cfgs[[my_i]]$biomass$min  <- input[[id_raw("bmin")]]
+        ## Biomass
+        cfgs[[my_i]]$biomass$max  <- input[[id_raw("bmax")]]
+        cfgs[[my_i]]$biomass$mean <- input[[id_raw("bmean")]]
+        cfgs[[my_i]]$biomass$min  <- input[[id_raw("bmin")]]
 
-				    # Population dynamics
-				    cfgs[[my_i]]$population$starv <- input[[id_raw("pstarv")]]
-				    cfgs[[my_i]]$population$dup   <- input[[id_raw("pdup")]]
-				    cfgs[[my_i]]$population$death <- input[[id_raw("pdeath")]]
+        ## Population
+        cfgs[[my_i]]$population$starv <- input[[id_raw("pstarv")]]
+        cfgs[[my_i]]$population$dup   <- input[[id_raw("pdup")]]
+        cfgs[[my_i]]$population$death <- input[[id_raw("pdeath")]]
 
-				    # Initial count
-				    cfgs[[my_i]]$initial_count    <- input[[id_raw("init")]]
+        ## Init pop & μ-max
+        cfgs[[my_i]]$initial_count <- input[[id_raw("init")]]
+        cfgs[[my_i]]$mu_max        <- input[[id_raw("mu_max")]]
 
-				    # mu_max (max growth rate)
-				    cfgs[[my_i]]$mu_max           <- input[[id_raw("mu_max")]]
+        unit_cfgs(cfgs)
+        removeModal()
+        showNotification(
+          paste("Changes saved for", cfgs[[my_i]]$model_name),
+          id = "modelSaveToast", type = "message", duration = 2
+        )
+      })
 
-				    unit_cfgs(cfgs)  # save back
+      ## --------------- OPEN modal on model click -----------------------
+      observeEvent(input[[paste0("model_", my_i)]], ignoreInit = TRUE, {
+        cache <- meta[[cfg_now$model_name]]
+        if (is.null(cache)) return()
 
-				    removeModal()
-				    showNotification(
-				      paste("Changes saved for", cfgs[[my_i]]$model_name),
-				      id       = "modelSaveToast",
-				      type     = "message",
-				      duration = 2
-				    )
-				  })
+        ## copie locali → evitiamo “cache non trovato” in renderDT
+        meta_df <- cache$meta
+        rxn_df  <- cache$rxn
+        bnd_df  <- cache$bnd
 
-				  ## show modal on model click -----------------------------------
-				  observeEvent(input[[paste0("model_", my_i)]], ignoreInit = TRUE, {
-				    cache <- meta[[cfg_now$model_name]]
-				    if (is.null(cache)) return()
+        showModal(
+          tags$div(
+            id = "modelDetailModal",
 
-				    ## build modal --------------------------------------------
-						showModal(
-							tags$div(
-								id = "modelDetailModal",  # unique hook
-								tags$head(
-									tags$style(HTML("
-										/* Wrapper specifico per questo modal */
-										#modelDetailModal .modal-content {
-											background-color: #f5f5f5;      /* grigio chiaro */
-											border-radius: 8px;
-											overflow: hidden;
-										}
+            ## ---------- INLINE CSS ------------------------------------
+            tags$head(
+              tags$style(HTML("
+                #modelDetailModal .modal-dialog  { max-width:900px; }
+                #modelDetailModal .modal-content { background:#f5f5f5; border-radius:8px; overflow:hidden; }
+                #modelDetailModal .modal-header,
+                #modelDetailModal .modal-footer  { background:#27ae60; color:#fff; border:none; padding:1rem 1.5rem; }
+                #modelDetailModal .modal-title   { font-size:2rem; font-weight:700; text-align:center; margin-bottom:.5rem; }
+                #modelDetailModal .modal-title::after{ content:''; display:block; width:80px; height:4px; background:#2ecc71; margin:.5rem auto 0; border-radius:2px; }
+                #modelDetailModal .modal-body    { padding:1.25rem 1.5rem; color:#333; }
 
-										/* Header e footer */
-										#modelDetailModal .modal-header,
-										#modelDetailModal .modal-footer {
-											background-color: #27ae60;      /* verde scuro */
-											color: #ffffff;
-											border: none;
-											padding: 1rem 1.5rem;
-										}
+                /* numericInput compatti */
+                #modelDetailModal .num-wrap .form-control{ max-width:140px!important; padding:.35rem .5rem;
+                                                            border-radius:.35rem; border:1px solid #27ae60; font-size:.9rem; }
 
-										/* Titolo principale */
-										#modelDetailModal .modal-title {
-											font-size: 2rem;
-											font-weight: 700;
-											text-align: center;
-											position: relative;
-											margin-bottom: 0.5rem;
-											color: #ffffff;
-										}
-										/* Bordo inferiore del titolo */
-										#modelDetailModal .modal-title::after {
-											content: \"\";
-											display: block;
-											width: 80px;
-											height: 4px;
-											background: #2ecc71;            /* verde più chiaro per contrasto */
-											margin: 0.5rem auto 0;          /* centrato */
-											border-radius: 2px;
-										}
+                /* layout 2 colonne sopra 600 px */
+                @media (min-width:600px){
+                  #modelDetailModal .config-row { display:flex; flex-wrap:wrap; gap:1rem; }
+                  #modelDetailModal .config-col { flex:1 1 calc(50% - 1rem); }
+                }
 
-										/* Corpo del modal */
-										#modelDetailModal .modal-body {
-											padding: 1.5rem;
-											color: #333333;
-										}
+                /* sub-card look */
+                .modelgen-subcard{ background:#f7fff0; border-left:6px solid #27ae60;
+                                   border-radius:6px; padding:1rem; }
+                .modelgen-subcard+.modelgen-subcard{ margin-top:1.5rem; }
+                .modelgen-subcard .subcard-title{ font-size:1.4rem; font-weight:700; text-transform:uppercase;
+                                                  margin-bottom:1rem; color:#1A242F; }
+                .modelgen-subcard .subcard-title::after{ content:''; display:block; width:60px; height:3px;
+                                                         background:#27ae60; margin-top:.5rem; border-radius:2px; }
 
-										/* Bottone Close più evidente */
-										#modelDetailModal .btn-default {
-											background-color: transparent;
-											color: #ffffff;
-											border: 1px solid #ffffff;
-										}
-										#modelDetailModal .btn-default:hover {
-											background-color: rgba(255,255,255,0.1);
-										}
+                /* DataTable header + righe */
+                #modelDetailModal table.dataTable thead{ background:#27ae60; color:#fff; }
+								/* ---------- Footer buttons --------------------------------------- */
+								#modelDetailModal .modal-footer .btn{
+									background:#2ecc71;           /* verde un po’ più chiaro per contrasto   */
+									border:1px solid #1e8449;     /* tono compatibile con il footer scuro    */
+									color:#fff;
+									font-weight:600;
+									padding:.45rem 1.2rem;
+									border-radius:.4rem;
+									transition:background .15s, box-shadow .15s;
+								}
 
-										/* Bottone Save */
-										#modelDetailModal .modal-save-btn {
-											background-color: #2ecc71;
-											border-color: #27ae60;
-											color: #ffffff;
-										}
-										#modelDetailModal .modal-save-btn:hover {
-											background-color: #27ae60;
-										}
-									"))
-								),
-								modalDialog(
-								title = div(style="background:#27ae60; color:#fff; padding: 1rem;",
-                paste("Model:", cfg_now$model_name)),
-								size      = "l",
-								easyClose = FALSE,
-								class     = "modal-model modal-model-detail",
+								#modelDetailModal .modal-footer .btn:hover{
+									background:#1e8449;           /* scurisce on-hover */
+									border-color:#196f3d;
+									box-shadow:0 0 0 3px rgba(30,132,73,.25);
+								}
 
-								tagList(
-									# ── Configuration Sub-Cards ─────────────────────────────────────
-									div(class = "modelgen-config",
+								#modelDetailModal .modal-footer .btn:focus{
+									box-shadow:0 0 0 3px rgba(46,204,113,.45);
+								}
 
-										# Biomass Data Sub-Card
-										div(class = "modelgen-subcard mb-3",
-											h5("Biomass data", class = "subcard-title"),
-											fluidRow(
-												column(4, numericInput(ns(id_raw("bmax")),  "Max",  value = cfg_now$biomass$max,  min = 0)),
-												column(4, numericInput(ns(id_raw("bmean")), "Mean", value = cfg_now$biomass$mean, min = 0)),
-												column(4, numericInput(ns(id_raw("bmin")),  "Min",  value = cfg_now$biomass$min,  min = 0))
-											)
-										),
-								 hr(class = "modal-divider"),
-										# Population Dynamics Sub-Card
-										div(class = "modelgen-subcard mb-3",
-											h5("Population dynamics", class = "subcard-title"),
-											fluidRow(
-												column(4, numericInput(ns(id_raw("pstarv")), "Starvation",  value = cfg_now$population$starv, min = 0)),
-												column(4, numericInput(ns(id_raw("pdup")),   "Duplication", value = cfg_now$population$dup,   min = 0)),
-												column(4, numericInput(ns(id_raw("pdeath")), "Death",       value = cfg_now$population$death, min = 0))
-											)
-										),
-								 hr(class = "modal-divider"),
-										# Initial Population Sub-Card
-										div(class = "modelgen-subcard mb-3",
-											h5("Initial population", class = "subcard-title"),
-											fluidRow(
-												column(12, numericInput(ns(id_raw("init")),  "Count", value = cfg_now$initial_count, min = 0))
-											)
-										),
-								 hr(class = "modal-divider"),
-										# μ max Sub-Card
-										div(class = "modelgen-subcard mb-3",
-											h5("μ max", class = "subcard-title"),
-											fluidRow(
-												column(12, numericInput(ns(id_raw("mu_max")), "μ max", value = ifelse(is.null(cfg_now$mu_max), 1, cfg_now$mu_max), min = 0))
-											)
-										)
-									), # /modelgen-config
-								 hr(class = "modal-divider"),
-									# ── Data Preview ────────────────────────────────────────────────────
-									div(class = "modelgen-subcard mb-3",
-										h5("Data Preview", class = "subcard-title"),
-										tabsetPanel(type = "tabs",
-											tabPanel("Metabolites",          DT::dataTableOutput(ns(tbl_meta))),
-											tabPanel("Reactions",            DT::dataTableOutput(ns(tbl_rxn))),
-											tabPanel("Boundary metabolites", DT::dataTableOutput(ns(tbl_bnd)))
-										)
+								#modelDetailModal .modal-footer .btn:active{
+									background:#196f3d !important;
+									border-color:#145a32 !important;
+								}
+
+              "))
+            ),
+
+            ## ---------- MODAL UI --------------------------------------
+            modalDialog(
+              title     = div(style="background:#27ae60;color:#fff;padding:1rem;",
+                              paste("Model:", cfg_now$model_name)),
+              size      = "l",
+              easyClose = FALSE,
+              class     = "modal-model modal-model-detail",
+
+              tagList(
+                ## ---- CONFIGURATION -----------------------------------
+                div(class = "modelgen-config",
+
+                  ## Biomass
+                  div(class = "modelgen-subcard mb-3",
+                    h5("Biomass data", class = "subcard-title"),
+                    div(class = "config-row",
+                      div(class="config-col num-wrap",
+                          numericInput(ns(id_raw("bmax")),  "Max",  cfg_now$biomass$max,  min = 0)),
+                      div(class="config-col num-wrap",
+                          numericInput(ns(id_raw("bmean")), "Mean", cfg_now$biomass$mean, min = 0)),
+                      div(class="config-col num-wrap",
+                          numericInput(ns(id_raw("bmin")),  "Min",  cfg_now$biomass$min,  min = 0))
+                    )
+                  ),
+
+                  ## Population
+                  div(class = "modelgen-subcard mb-3",
+                    h5("Population dynamics", class = "subcard-title"),
+                    div(class = "config-row",
+                      div(class="config-col num-wrap",
+                          numericInput(ns(id_raw("pstarv")), "Starvation",  cfg_now$population$starv, min = 0)),
+                      div(class="config-col num-wrap",
+                          numericInput(ns(id_raw("pdup")),   "Duplication", cfg_now$population$dup,   min = 0)),
+                      div(class="config-col num-wrap",
+                          numericInput(ns(id_raw("pdeath")), "Death",       cfg_now$population$death, min = 0))
+                    )
+                  ),
+
+                  ## Initial pop
+                  div(class = "modelgen-subcard mb-3",
+                    h5("Initial population", class = "subcard-title"),
+                    div(class="num-wrap",
+                        numericInput(ns(id_raw("init")), "Count", cfg_now$initial_count, min = 0))
+                  ),
+
+                  ## μ max
+                  div(class = "modelgen-subcard mb-3",
+                    h5("μ max", class = "subcard-title"),
+                    div(class="num-wrap",
+                        numericInput(ns(id_raw("mu_max")), "μ max",
+                                     ifelse(is.null(cfg_now$mu_max), 1, cfg_now$mu_max), min = 0))
+                  )
+                ),
+
+                ## ---- DATA PREVIEW ------------------------------------
+								div(class = "modelgen-subcard mb-3 data-preview-card",   #  ← aggiunta classe
+									h5("Data Preview", class = "subcard-title"),
+									tabsetPanel(type = "tabs",
+										tabPanel("Metabolites",          DT::dataTableOutput(ns(tbl_meta))),
+										tabPanel("Reactions",            DT::dataTableOutput(ns(tbl_rxn))),
+										tabPanel("Boundary metabolites", DT::dataTableOutput(ns(tbl_bnd)))
 									)
-								),
-
-								footer = tagList(
-									modalButton("Close"),
-									actionButton(ns(save_raw), "Save changes", class = "btn-primary modal-save-btn")
 								)
+              ),
 
-							)
-						)
-					)
+              footer = tagList(
+                modalButton("Close"),
+                actionButton(ns(save_raw), "Save changes",
+                             class = "btn-primary modal-save-btn")
+              )
+            )  # /modalDialog
+          )   # /tags$div
+        )     # /showModal
 
-				    ## render tables ------------------------------------------
-				    opts <- list(pageLength = 10, scrollY = 300, scrollX = TRUE,
-				                 dom = "ftip", className = "stripe hover")
-				    output[[tbl_meta]] <- DT::renderDataTable(
-				      DT::datatable(cache$meta, options = opts, rownames = FALSE), server = FALSE)
-				    output[[tbl_rxn]]  <- DT::renderDataTable(
-				      DT::datatable(cache$rxn,  options = opts, rownames = FALSE), server = FALSE)
-				    output[[tbl_bnd]]  <- DT::renderDataTable(
-				      DT::datatable(cache$bnd,  options = opts, rownames = FALSE), server = FALSE)
-				    lapply(c(tbl_meta, tbl_rxn, tbl_bnd), function(id)
-				      outputOptions(output, id, suspendWhenHidden = FALSE))
-				  })  # /observeEvent model click
-				})    # /local
-			})      # /lapply
-		})        # /outer observe
+        ## ---------- DataTable rendering -------------------------------
+        dt_opts <- list(
+          pageLength = 10, scrollY = 500, scrollX = TRUE,
+          dom = "ftip", className = "stripe hover"
+        )
+
+        output[[tbl_meta]] <- DT::renderDataTable(
+          DT::datatable(meta_df, options = dt_opts, rownames = FALSE), server = FALSE)
+
+        output[[tbl_rxn]]  <- DT::renderDataTable(
+          DT::datatable(rxn_df,  options = dt_opts, rownames = FALSE), server = FALSE)
+
+        output[[tbl_bnd]]  <- DT::renderDataTable(
+          DT::datatable(bnd_df,  options = dt_opts, rownames = FALSE), server = FALSE)
+
+        lapply(c(tbl_meta, tbl_rxn, tbl_bnd), function(id)
+          outputOptions(output, id, suspendWhenHidden = FALSE))
+      })   # /observeEvent click
+    })     # /local
+  })       # /lapply
+})         # /outer observe
+
 
 
 		# ---- 8) Boundary‐metabolites (unchanged) -----------------------------
@@ -1074,31 +1112,35 @@ global_settings_card <- div(
 		# Auto‐sync global_cfg whenever any global input changes
 		observe({
 			req(
-				input$global_b_max, input$global_b_mean, input$global_b_min,
-				input$global_p_starv, input$global_p_dup, input$global_p_death,
+				input$global_b_max,  input$global_b_mean,  input$global_b_min,
+				input$global_p_starv, input$global_p_dup,  input$global_p_death,
 				input$global_init_count,
 				input$global_volume, input$global_cell_density,
-				input$global_fba_ub, input$global_fba_lb, input$global_background_met
+				input$global_proj_lb, input$global_proj_ub,
+				input$global_nproj_lb, input$global_nproj_ub
 			)
+
 			global_cfg(list(
-				biomass         = list(
+				biomass    = list(
 				  max  = input$global_b_max,
 				  mean = input$global_b_mean,
 				  min  = input$global_b_min
 				),
-				population      = list(
+				population = list(
 				  starv = input$global_p_starv,
 				  dup   = input$global_p_dup,
 				  death = input$global_p_death
 				),
-				initial_count   = input$global_init_count,
-				volume          = input$global_volume,
-				cell_density    = input$global_cell_density,
-				fba_upper_bound = input$global_fba_ub,
-				fba_lower_bound = input$global_fba_lb,
-				background_met  = input$global_background_met
+				initial_count             = input$global_init_count,
+				volume                    = input$global_volume,
+				cell_density              = input$global_cell_density,
+				projected_lower_bound     = input$global_proj_lb,
+				projected_upper_bound     = input$global_proj_ub,
+				not_projected_lower_bound = input$global_nproj_lb,
+				not_projected_upper_bound = input$global_nproj_ub
 			))
 		})
+
 
 
 # ---- C‴) YAML gen: live-read per-model inputs with global fallbacks AND write to disk ----
@@ -1122,6 +1164,9 @@ global_settings_card <- div(
 				  size      = "l"
 				)
 			)
+			
+			## 1) assicura il reset in **qualunque** esito
+  		on.exit(reset_state(), add = TRUE)
 
 			# 1) Wrap everything in tryCatch to cleanly handle errors
 			tryCatch({
@@ -1134,28 +1179,29 @@ global_settings_card <- div(
 				yaml_txt <- build_hypernode_yaml(eff_cfgs, global_cfg(), bounds)
 
 				# • 3) preview YAML in-app
-				output$cfg_yaml <- renderText(paste(yaml_txt, collapse = "\n"))
+				#output$cfg_yaml <- renderText(paste(yaml_txt, collapse = "\n"))
 
 				# • 4) write YAML & build hypernode directory
 				out_paths  <- write_hypernode_yaml(yaml_txt, working_dir(), hypernode_name())
 				config_dir <- dirname(out_paths$yaml)
 				bc_json    <- file.path(config_dir, "boundary_conditions.json")
-				vol  <- global_cfg()$volume
-				dens <- global_cfg()$cell_density
-				fba_upper_bound <- global_cfg()$fba_upper_bound
-				fba_lower_bound <- global_cfg()$fba_lower_bound
-				background_met <- global_cfg()$background_met
-				
+
+				vol   <- global_cfg()$volume
+				dens  <- global_cfg()$cell_density
+				plb   <- global_cfg()$projected_lower_bound
+				pub   <- global_cfg()$projected_upper_bound
+				nlb   <- global_cfg()$not_projected_lower_bound
+				nub   <- global_cfg()$not_projected_upper_bound
 
 				writeBoundaryConditionsStatic(
-					volume       = vol,
-					cell_density = dens,
-					output_json  = bc_json,
-					fba_upper_bound = fba_upper_bound,
-					fba_lower_bound = fba_lower_bound,
-					background_met  = background_met
+					volume                     = vol,
+					cell_density               = dens,
+					output_json                = bc_json,
+					projected_lower_bound      = plb,
+					projected_upper_bound      = pub,
+					not_projected_lower_bound  = nlb,
+					not_projected_upper_bound  = nub
 				)
-
 
 				  epimodFBAfunctions::build_hypernodeGUI(
 				    hypernode_name           = hypernode_name(),
@@ -1300,39 +1346,39 @@ global_settings_card <- div(
 		})
 		
 		reset_state <- function() {
-			# 1) remove temp config dir
+			# 1) pulizia della cartella temporanea config/
 			cfg <- cfg_dir_path()
 			if (!is.null(cfg) && dir.exists(cfg)) unlink(cfg, recursive = TRUE)
 			cfg_dir_path(NULL)
 
-			# 2) reset reactive values
+			# 2) azzera TUTTE le reactive values
 			work_valid(FALSE);  mat_valid(FALSE)
 			working_dir(NULL);  matfile_dir(NULL)
 			hypernode_name(NULL)
 			unit_cfgs(list());  meta_cache(list());  current(1)
-
-			# 3) RESET GLOBAL CFG ← valori di default
-			global_cfg(list(
-				biomass      = list(max = 1, mean = 1, min = 0),
-				population   = list(starv = 0, dup = 1, death = 0),
-				volume       = 0.001,
-				cell_density = 1e10,
-				initial_count= 1e6,
-				fba_upper_bound <- 1000,
-				fba_lower_bound <- -1000,
-				background_met <- 1000
-			))
-
-			# 4) RESET BOUNDARY SELECTION
 			selected_bmet(character())
 
-			# 5) forza la UI: svuota search + riporta checkbox “All”
-			updateTextInput(session, ns("bsearch"), value = "")
+			# 3) ripristina i default globali  (stessi campi dell’inizializzazione!)
+			global_cfg(list(
+				biomass                    = list(max = 1, mean = 1, min = 0),
+				population                 = list(starv = 0, dup = 1, death = 0),
+				volume                     = 0.001,
+				cell_density               = 1e10,
+				initial_count              = 1e6,
+				projected_lower_bound      = 1000,
+				projected_upper_bound      = 1000,
+				not_projected_lower_bound  = 1000,
+				not_projected_upper_bound  = 1000
+			))
+
+			# 4) reset UI filtri / search
+			updateTextInput(session,  ns("bsearch"),      value = "")
 			updateCheckboxGroupInput(session, ns("model_filter"), selected = "All")
 
-			# 6) flag di reset per ricostruire il top_card
+			# 5) forza il rebuild del top-card
 			reset_flag(TRUE)
 		}
+
 
 		
 

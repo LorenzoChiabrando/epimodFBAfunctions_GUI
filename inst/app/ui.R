@@ -77,10 +77,11 @@ dashboardPage(
       tags$link(rel = "stylesheet", type = "text/css", href = "model-gen/boundary-met.css"),
       tags$link(rel = "stylesheet", type = "text/css", href = "model-gen/modal-bacteria.css"),
 
-      tags$link(rel = "stylesheet", type = "text/css", href = "home-css/home.css"),
-      tags$link(rel = "stylesheet", type = "text/css", href = "home-css/home-main.css"),
-      tags$link(rel = "stylesheet", type = "text/css", href = "home-css/home-cards.css"),
-      tags$link(rel = "stylesheet", type = "text/css", href = "home-css/tutorial.css"),
+     tags$link(rel = "stylesheet", type = "text/css", href = "home-css/new-home.css"),
+     # tags$link(rel = "stylesheet", type = "text/css", href = "home-css/home.css"),
+     # tags$link(rel = "stylesheet", type = "text/css", href = "home-css/home-main.css"),
+     # tags$link(rel = "stylesheet", type = "text/css", href = "home-css/home-cards.css"),
+     # tags$link(rel = "stylesheet", type = "text/css", href = "home-css/tutorial.css"),
       
       tags$link(rel = "stylesheet", type = "text/css", href = "simulation-css/base.css"),
       tags$link(rel = "stylesheet", type = "text/css", href = "simulation-css/models-card.css"),

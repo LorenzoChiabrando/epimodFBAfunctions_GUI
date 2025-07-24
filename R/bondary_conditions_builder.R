@@ -4,31 +4,33 @@
 #'
 #' @param output_json Path to write the JSON file (default "boundary_conditions.json")
 #' @export
-writeBoundaryConditionsStatic <- function(volume       = 0.001,
-                                          cell_density = 1e10,
-                                          fba_upper_bound = 1000,
-                                          fba_lower_bound = -1000,
-                                          background_met  = 1000,
-                                          output_json  = "boundary_conditions.json")
+writeBoundaryConditionsStatic <- function(
+  volume                     = 0.001,
+  cell_density               = 1e10,
+  projected_lower_bound      = 1000,
+  projected_upper_bound      = 1000,
+  not_projected_lower_bound  = 1000,
+  not_projected_upper_bound  = 1000,
+  output_json                = "boundary_conditions.json"
+)
+
 {
   # the full JSON payload, exactly as required
   json_text <- '
 {
-  // Global reactor and cell‐density parameters
+  // Global reactor and cell-density parameters
   // -----------------------------------------------------
-  // Maximum uptake/secretion flux bound for metabolites
-  // not explicitly modelled in FBA [mmol per gDW per hour]
-  "background_met": 1000.0,
+  // Default uptake / secretion bounds [mmol gDW-1 h-1]
 
-  // FBA projected defualt upper bounds
-  "fba_upper_bound": 1000.0,
-  "fba_lower_bound": -1000.0,
+  "projected_lower_bound":      1000.0,
+  "projected_upper_bound":      1000.0,
+  "not_projected_lower_bound":  1000.0,
+  "not_projected_upper_bound":  1000.0,
 
   // Reactor/compartment volume [mL]
   "volume": 0.001,
 
-  // Cell density δ: maximum cells per unit volume at carrying
-  // capacity (physical‐space constraint) [cells per mL]
+  // Cell density δ [cells per mL]
   "cell_density": 1e10,
 
   // Specific exchange‐reaction bounds for this medium:
@@ -1000,11 +1002,13 @@ writeBoundaryConditionsStatic <- function(volume       = 0.001,
 
   # 2)  Parse in lista, sostituisci i campi dinamici
   bc <- jsonlite::fromJSON(json_text, simplifyVector = FALSE)
-  bc$volume       				 <- volume
-  bc$cell_density 				 <- cell_density
-  bc$fba_upper_bound       <- fba_upper_bound
-  bc$fba_lower_bound 			 <- fba_lower_bound
-  bc$background_met        <- background_met
+	bc$volume                     <- volume
+	bc$cell_density               <- cell_density
+	bc$projected_lower_bound      <- projected_lower_bound
+	bc$projected_upper_bound      <- projected_upper_bound
+	bc$not_projected_lower_bound  <- not_projected_lower_bound
+	bc$not_projected_upper_bound  <- not_projected_upper_bound
+
 
   # 3)  Scrivi il file formattato
   jsonlite::write_json(

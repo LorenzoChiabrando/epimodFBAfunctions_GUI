@@ -1,103 +1,155 @@
-/* ── Detail‐Modal “Data Preview” Panel (light green border) ── */
-.modal-model-detail > .modal-dialog .modal-content .card:last-of-type {
-  background: #f0fff4;                /* pale green */
-  border-left: 6px solid #27ae60;
-  border-radius: 6px;
-  padding: 1rem;
-  margin-top: 2rem;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+/* ────────────────────────────────────────────────────────────────
+   DETAIL-MODAL – struttura generale
+   ──────────────────────────────────────────────────────────────── */
+.modal-model-detail > .modal-dialog .modal-content .card:last-of-type{
+  background:#f0fff4;
+  border-left:6px solid #27ae60;
+  border-radius:6px;
+  padding:1rem;
+  margin-top:2rem;
+  box-shadow:0 2px 8px rgba(0,0,0,.05);
+}
+.modal-model-detail .card:last-of-type .modal-section-title{
+  font-size:1.4rem;font-weight:700;color:#27ae60;text-transform:uppercase;
+  margin-bottom:1rem;position:relative;
+}
+.modal-model-detail .card:last-of-type .modal-section-title::after{
+  content:"";display:block;width:50px;height:3px;background:#27ae60;
+  margin-top:.5rem;border-radius:2px;
 }
 
-/* Section titles inside that Data Preview card */
-.modal-model-detail .card:last-of-type .modal-section-title {
-  font-size: 1.4rem;
-  font-weight: 700;
-  color: #27ae60;
-  text-transform: uppercase;
-  margin-bottom: 1rem;
-  position: relative;
-}
-.modal-model-detail .card:last-of-type .modal-section-title::after {
-  content: "";
-  display: block;
-  width: 50px;
-  height: 3px;
-  background: #27ae60;
-  margin-top: 0.5rem;
-  border-radius: 2px;
+/* ────────────────────────────────────────────────────────────────
+   SUB-CARDS (config + μ max + Data Preview)
+   ──────────────────────────────────────────────────────────────── */
+.modal-model-detail .modelgen-subcard{
+  background:#f7fff0;
+  border-left:6px solid #27ae60;
+  border-radius:6px;
+  padding:1rem;
+  margin-top:0;
 }
 
-/* ── Inner “sub-cards” for each config section ── */
-.modal-model-detail .modelgen-subcard {
-  background: #f7fff0;              /* very light green */
-  border-left: 6px solid #27ae60;   /* green accent */
-  border-radius: 6px;
-  padding: 1rem;
+/* separatore pieno fra sub-card consecutive all’interno di .modelgen-config */
+.modal-model-detail .modelgen-config .modelgen-subcard + .modelgen-subcard{
+  position:relative;
+  margin-top:3.5rem;        /* spazio verticale */
+  padding-top:2.25rem;
 }
-.modal-model-detail .modelgen-subcard + .modelgen-subcard {
-  margin-top: 1.5rem;               /* extra space between sub-cards */
-}
-
-/* Space out each group of inputs */
-.modal-model-detail .modelgen-config__group {
-  margin-bottom: 1.5rem;
+.modal-model-detail .modelgen-config .modelgen-subcard + .modelgen-subcard::before{
+  content:"";
+  position:absolute;
+  top:-1.75rem;
+  left:0;width:100%;height:2px;
+  background:#27ae60;opacity:.55;border-radius:1px;
 }
 
-/* Match input borders to the green theme */
-.modal-model-detail .modelgen-subcard .form-control {
-  border: 1px solid #27ae60;
+/* Data-Preview card (staccata ulteriormente) */
+.modal-model-detail .data-preview-card{
+  margin-top:4.5rem!important;
+  padding-top:2.5rem;
+  border-top:2px solid #27ae60;
 }
 
-
-/* ── Sub-card Titles: Bigger + Underline ── */
-.modal-model-detail .modelgen-subcard .subcard-title {
-  font-size: 1.4rem;                /* larger text */
-  font-weight: 700;
-  text-transform: uppercase;
-  position: relative;
-  margin-bottom: 1rem;
-  color: #1A242F;
+/* titoli sub-card */
+.modal-model-detail .modelgen-subcard .subcard-title{
+  font-size:1.4rem;font-weight:700;text-transform:uppercase;
+  color:#1A242F;margin-bottom:1rem;position:relative;
 }
-.modal-model-detail .modelgen-subcard .subcard-title::after {
-  content: "";
-  display: block;
-  width: 60px;
-  height: 3px;
-  background: #27ae60;              /* same accent as config card */
-  margin-top: 0.5rem;
-  border-radius: 2px;
+.modal-model-detail .modelgen-subcard .subcard-title::after{
+  content:"";display:block;width:60px;height:3px;background:#27ae60;
+  margin-top:.5rem;border-radius:2px;
 }
 
-/* ── Round the Numeric Inputs ── */
-.modal-model-detail .modelgen-subcard .form-control {
-  border-radius: 0.5rem;            /* pill-ish corners */
-  padding: 0.5rem;                  /* a little breathing room */
+/* campi input */
+.modal-model-detail .modelgen-subcard .form-control{
+  border:1px solid #27ae60;border-radius:.5rem;padding:.5rem;font-size:.9rem;
 }
 
-/* ── Dark-Green Header & Footer for modal-model ── */
-.modal-model .modal-header {
-  background: #196f3d  !important ;     /* dark green */
-  color: #ffffff  !important ;          /* white text */
-  border-bottom: none;
-  border-top-left-radius: .3rem;
-  border-top-right-radius: .3rem;
+/* ────────────────────────────────────────────────────────────────
+   HEADER & FOOTER modal
+   ──────────────────────────────────────────────────────────────── */
+.modal-model .modal-header{
+  background:#196f3d!important;color:#fff!important;border-bottom:none;
+  border-top-left-radius:.3rem;border-top-right-radius:.3rem;
+}
+.modal-model .modal-header .modal-title{color:#fff;}
+.modal-model .modal-footer{
+  background:#196f3d!important;border-top:none;
+  border-bottom-left-radius:.3rem;border-bottom-right-radius:.3rem;
+}
+.modal-model .modal-footer .btn{
+  background:#27ae60!important;border-color:#1e8449!important;color:#fff;
 }
 
-.modal-model .modal-header .modal-title {
-  color: #ffffff;
+/* ────────────────────────────────────────────────────────────────
+   TABSET – pillole verdi
+   ──────────────────────────────────────────────────────────────── */
+.modal-model-detail .nav-tabs{
+  border-bottom:2px solid #27ae60!important;
+}
+.modal-model-detail .nav-tabs .nav-link{
+  border:none!important;background:#f0fff4!important;color:#196f3d!important;
+  font-weight:600;margin-right:4px;border-radius:.5rem .5rem 0 0;
+}
+.modal-model-detail .nav-tabs .nav-link:hover{
+  background:#d9f5e2!important;color:#196f3d!important;
+}
+.modal-model-detail .nav-tabs .nav-link.active,
+.modal-model-detail .nav-tabs .nav-link.show{
+  background:#27ae60!important;color:#fff!important;
+  box-shadow:0 -2px 5px rgba(0,0,0,.06) inset!important;
 }
 
-.modal-model .modal-footer {
-  background: #196f3d  !important ;     /* same dark green */
-  border-top: none;
-  border-bottom-left-radius: .3rem;
-  border-bottom-right-radius: .3rem;
+/* ────────────────────────────────────────────────────────────────
+   DATATABLE – header, celle, ricerca, paginazione, scrollbar
+   ──────────────────────────────────────────────────────────────── */
+/* header verde */
+.modal-model-detail table.dataTable thead th{
+  background:#27ae60;color:#fff;font-size:1.05rem;font-weight:600;
+  padding:8px 12px;transition:background .15s;
+}
+/* celle corpo */
+.modal-model-detail table.dataTable tbody td{
+  font-size:1.45rem;                                     /* ↑ più grande */
+  color:#1A242F;padding:8px 12px;
+}
+.modal-model-detail table.dataTable tbody tr{
+  border-bottom:1px solid #d1e8d6;
+}
+.modal-model-detail table.dataTable tbody tr:hover{
+  background:#e0f7eb;
+}
+/* search box distanziata */
+.modal-model-detail .dataTables_filter{
+	  font-size:1.45rem;                                     /* ↑ più grande */
+  margin:1rem 0!important;            /* spinge la barra in basso */
+  float:none!important;text-align:left!important;
+}
+.modal-model-detail .dataTables_filter label{font-weight:600;color:#27ae60;}
+.modal-model-detail .dataTables_filter input{
+  border:1px solid #27ae60;border-radius:22px;
+  padding:.45rem .85rem;font-size:.95rem;outline:none;width:230px;
+}
+.modal-model-detail .dataTables_filter input:focus{
+  box-shadow:0 0 0 3px rgba(39,174,96,.25);
 }
 
-.modal-model .modal-footer .btn {
-  background: #27ae60  !important ;     /* accent green for buttons */
-  border-color: #1e8449  !important ;
-  color: #fff;
+/* paginazione: hover evidente */
+.modal-model-detail .dataTables_paginate{margin-top:.8rem!important;}
+.modal-model-detail .dataTables_paginate .paginate_button{
+  background:#e7faec!important;border:1px solid #27ae60!important;
+  color:#196f3d!important;padding:.3rem .7rem;margin:0 3px;border-radius:.3rem;
+  font-size:.9rem;transition:all .15s;
+}
+.modal-model-detail .dataTables_paginate .paginate_button:hover{
+  background:#c9efd5!important;color:#196f3d!important;
+}
+.modal-model-detail .dataTables_paginate .paginate_button.current{
+  background:#27ae60!important;color:#fff!important;
 }
 
-
+/* scrollbar (Chrome/Safari/Edge) */
+.modal-model-detail ::-webkit-scrollbar{height:8px;width:8px;}
+.modal-model-detail ::-webkit-scrollbar-track{background:#f0fff4;border-radius:8px;}
+.modal-model-detail ::-webkit-scrollbar-thumb{background:#27ae60;border-radius:8px;}
+.modal-model-detail ::-webkit-scrollbar-thumb:hover{background:#1e8449;}

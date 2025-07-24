@@ -7,9 +7,10 @@
 writeBoundaryConditionsStatic(
   volume = 0.001,
   cell_density = 1e+10,
-  fba_upper_bound = 1000,
-  fba_lower_bound = -1000,
-  background_met = 1000,
+  projected_lower_bound = 1000,
+  projected_upper_bound = 1000,
+  not_projected_lower_bound = 1000,
+  not_projected_upper_bound = 1000,
   output_json = "boundary_conditions.json"
 )
 }
