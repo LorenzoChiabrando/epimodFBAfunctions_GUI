@@ -10,7 +10,10 @@ sensitivityUI <- function(id) {
   shiny::tabPanel(
     title = "Sensitivity",
     div(class = "sim-card",
-
+			div(class = "logo-hero-banner",
+					tags$img(src = "Logo_QBio.png", alt = "Logo", class = "hero-logo"),
+					tags$h1("Sensitivity Analysis", class = "hero-title")
+				),
       ## Directory selector
       uiOutput(ns("dir_selector")),
 

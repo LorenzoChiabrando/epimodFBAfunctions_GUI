@@ -7,14 +7,15 @@ modelGenUI <- function(id) {
 
   tabPanel(
     title = "Model Generation",
-    
-    div(class = "sim-card",
-      # (1) top card: Browse  ⇄  name  ⇄  reset
-      uiOutput(ns("top_card")),
-
-      # (2) accordion + global cards in a scrollable box
-			uiOutput(ns("unit_editor"))
-    )
+					
+			div(class = "sim-card",
+				div(class = "logo-hero-banner",
+					tags$img(src = "Logo_QBio.png", alt = "Logo", class = "hero-logo"),
+					tags$h1("Model Generation", class = "hero-title")
+				),
+				uiOutput(ns("top_card")),
+				uiOutput(ns("unit_editor"))
+			)
 
   )
 }
@@ -195,6 +196,7 @@ modelGenServer <- function(id) {
 				    strong("Hypernode:", class = "me-2 text-secondary"),
 				    span(hyper_nodename, class = "badge bg-primary fs-6")
 				  ),
+				  hr(),
 				  div(class = "mt-3 text-right",
 				    actionButton(ns("btn_reset_dirs"), NULL,
 				      icon  = icon("redo"),
@@ -236,6 +238,7 @@ modelGenServer <- function(id) {
 				        icon  = icon("folder-open"),
 				        class = "btn btn-primary shinyDirButton flex-grow-1"
 				      ),
+				      
 
 				    # MAT dir
 				    if (md_ok)
@@ -252,6 +255,7 @@ modelGenServer <- function(id) {
 				        class = "btn btn-primary shinyDirButton flex-grow-1"
 				      ),
 
+				      hr(),
 				    # Bottone reset
 				    if (wd_ok || md_ok)
 				      div(class = "mt-3 text-right",
@@ -688,7 +692,7 @@ global_settings_card <- div(
       )
     )
   ),
-
+	hr(),
   # ---- Population Dynamics --------------------------------------------------
   div(class = "modelgen-global__section mb-3",
     h5("Population Dynamics"),
@@ -716,7 +720,7 @@ global_settings_card <- div(
       )
     )
   ),
-
+	hr(),
   # ---- Initial Population ---------------------------------------------------
   div(class = "modelgen-global__section mb-3",
     h5("Initial Population"),
@@ -730,7 +734,7 @@ global_settings_card <- div(
       )
     )
   ),
-
+	hr(),
   # ---- Reactor Parameters ----------------------------------------------------
   div(class = "modelgen-global__section mb-3",
     h5("Reactor Parameters"),
@@ -751,7 +755,7 @@ global_settings_card <- div(
       )
     )
   ),
-  
+  	hr(),
 	# ── System Parameters ─────────────────────────────────────────────
 	div(class = "modelgen-global__section mb-3",
 		h5("System Parameters"),

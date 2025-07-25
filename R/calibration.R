@@ -10,7 +10,10 @@ calibrationUI <- function(id) {
   shiny::tabPanel(
     title = "Calibration",
     div(class = "sim-card",
-
+			div(class = "logo-hero-banner",
+					tags$img(src = "Logo_QBio.png", alt = "Logo", class = "hero-logo"),
+					tags$h1("Model Calibration", class = "hero-title")
+				),
       ## Directory selector
       uiOutput(ns("dir_selector")),
 

@@ -1,0 +1,61 @@
+/* ================================================================
+   0) Definiamo il padding orizzontale della sim-card come variabile
+   ================================================================ */
+.sim-card{
+  --sim-pad: 2rem;      /* << usa qui il valore reale del tuo padding */
+  padding: var(--sim-pad);
+  border-radius: 8px;
+  background: transparent;
+}
+
+/* ================================================================
+   1) Banner: si estende oltre il padding con margini negativi
+   ================================================================ */
+   
+   /* -----------------------------------------------------------
+   LOGO HERO – angoli 0 px + gradiente tono-su-tono
+----------------------------------------------------------- */
+
+.logo-hero-banner{
+  /* gradiente acqua/turchese */
+  background: linear-gradient(
+    180deg,           /* dall’alto al basso */
+    #00d9ff 0%,       /* cyan brillante     */
+    #04c4e3 40%,      /* azz. medio         */
+    #20a9c3 75%,      /* verde-acqua        */
+    #2b8b94 100%      /* più scuro in fondo */
+  );
+  color:#fff;
+
+  /* full-width rispetto al contenitore, più “extra” oltre il padding */
+  margin-left: calc(-1 * var(--sim-pad));
+  margin-right: calc(-1 * var(--sim-pad));
+
+  /* opz.: se vuoi che tocchi anche il bordo superiore del card      */
+  margin-top: calc(-1 * var(--sim-pad));
+
+  /* spaziatura verticale */
+  padding: 2.5rem 0;
+
+  /* layout centrato verticale */
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+
+  /* raccordo bordi arrotondati con il card */
+  border-radius: 0 !important;
+
+  /* separa dal contenuto sottostante */
+  margin-bottom: 2rem;
+  box-shadow: 0 4px 12px rgba(0,0,0,.1);
+}
+
+/* ------ Logo e titolo ------ */
+.hero-logo{ max-width:240px;height:auto; }
+.hero-title{
+  font:700 2.5rem/1.2 "Inter",sans-serif;
+  margin:1rem 0 0;
+}
+@media(max-width:768px){ .hero-title{ font-size:2rem; } }
+

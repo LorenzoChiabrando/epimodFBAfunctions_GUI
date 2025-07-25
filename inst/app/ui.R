@@ -81,7 +81,7 @@ dashboardPage(
      # tags$link(rel = "stylesheet", type = "text/css", href = "home-css/home.css"),
      # tags$link(rel = "stylesheet", type = "text/css", href = "home-css/home-main.css"),
      # tags$link(rel = "stylesheet", type = "text/css", href = "home-css/home-cards.css"),
-     # tags$link(rel = "stylesheet", type = "text/css", href = "home-css/tutorial.css"),
+      tags$link(rel = "stylesheet", type = "text/css", href = "home-css/tutorial.css"),
       
       tags$link(rel = "stylesheet", type = "text/css", href = "simulation-css/base.css"),
       tags$link(rel = "stylesheet", type = "text/css", href = "simulation-css/models-card.css"),
@@ -92,8 +92,9 @@ dashboardPage(
       tags$link(rel = "stylesheet", type = "text/css", href = "simulation-css/modal-model.css"),
       tags$link(rel = "stylesheet", type = "text/css", href = "simulation-css/load-save-buttons.css"),       
       tags$link(rel = "stylesheet", type = "text/css", href = "simulation-css/link-modals.css"),       
-      
-      #tags$link(rel = "stylesheet", type = "text/css", href = "data-vis/data-vis.css"),
+      tags$link(rel = "stylesheet", type = "text/css", href = "simulation-css/header.css"),
+            
+      tags$link(rel = "stylesheet", type = "text/css", href = "data-vis/data-vis.css"),
 
       # your JS
       tags$script(src = "modal-init.js"),

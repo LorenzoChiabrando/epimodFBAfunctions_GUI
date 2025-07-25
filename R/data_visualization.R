@@ -1,55 +1,53 @@
-# UI for Data Visualization
 #' @export
 dataVisUI <- function(id) {
   ns <- NS(id)
+
   tabPanel(
     title = "Data Visualization",
-    
-		div(class = "card p-3",
-			h4("Visualize Hypernode Results"),
 
-			## ── directory picker card ────────────────────────
-			div(class = "ddv-dir-card mt-3",
-				shinyFiles::shinyDirButton(
-				  id    = ns("hypernode_dir"),
-				  label = "Browse Hypernode…",
-				  title = "Select your hypernode folder",
-				  icon  = icon("folder-open"),
-				  class = "ddv-dir-btn"
-				),
-				span(textOutput(ns("dir_path")), class = "selected-ddv-dir")
-			),
+    ## ────────── WRAPPER sim-card ──────────
+    div(class = "sim-card",
 
-			actionButton(ns("btn_plot"), "Show Plots", class = "btn-primary mt-2")
-		),
+      ## Banner identico agli altri moduli
+      div(class = "logo-hero-banner",
+        tags$img(src = "Logo_QBio.png", alt = "Logo", class = "hero-logo"),
+        tags$h1("Data Visualization", class = "hero-title")
+      ),
 
-		
-		
-    # Plots panel
-    conditionalPanel(
-      condition = sprintf("output['%s'] == true", ns("has_plots")),
-      wellPanel(
-        fluidRow(
-          column(6,
-            plotOutput(ns("species_plot"),    height = "250px")
+      ## ────────── DIRECTORY (card blu) ──────────
+      div(class = "sim-section-card directory",
+        h5(icon("folder-open"), " Hypernode directory", class = "sim-section-title"),
+        div(class = "selected-dir d-flex align-items-center gap-3 mb-3",
+          shinyFiles::shinyDirButton(
+            id    = ns("hypernode_dir"),
+            label = "Browse…",
+            title = "Select your hypernode folder",
+            icon  = icon("folder-open"),
+            class = "btn-sim-dir"          # ri-usa il bottone grande blu
           ),
-          column(6,
-            plotOutput(ns("metabolite_plot"), height = "250px")
-          )
+          span(textOutput(ns("dir_path")), class = "badge bg-primary fs-6")
         ),
-        fluidRow(
-          column(6,
-            plotOutput(ns("biomass_plot"),    height = "250px")
-          ),
-          column(6,
-            # Reserved for future
-            NULL
+        hr(),
+        actionButton(ns("btn_plot"), "Show Plots", class = "btn btn-primary px-4")
+      ),
+
+      ## ────────── PLOT GRID (card arancio) ──────────
+      conditionalPanel(
+        condition = sprintf("output['%s'] == true", ns("has_plots")),
+        div(class = "sim-section-card config dv-plots-card",
+          h5(icon("chart-bar"), " Hypernode dynamics", class = "sim-section-title"),
+          div(class = "dv-plots-grid",
+            plotOutput(ns("species_plot"),    height = 250),
+            plotOutput(ns("metabolite_plot"), height = 250),
+            plotOutput(ns("biomass_plot"),    height = 250)
+            # quarto slot disponibile
           )
         )
       )
     )
   )
 }
+
 
 # Server for Data Visualization
 #' @export
