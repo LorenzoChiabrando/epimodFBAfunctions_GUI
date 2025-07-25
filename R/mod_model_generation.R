@@ -4,7 +4,15 @@
 #' @export
 modelGenUI <- function(id) {
   ns <- NS(id)
-
+	tags$head(
+		tags$script(HTML("
+		  /* Chiudi TUTTI i modali di Bootstrap */
+		  Shiny.addCustomMessageHandler('closeAllModals', function(msg){
+		    $('.modal').modal('hide');          // chiude i modali
+		    $('.modal-backdrop').remove();      // rimuove overlay rimasti
+		  });
+		"))
+	)
   tabPanel(
     title = "Model Generation",
 					
@@ -30,6 +38,9 @@ modelGenServer <- function(id) {
 
 
     ns <- session$ns
+
+		close_all_modals <- function() session$sendCustomMessage("closeAllModals", list())
+
 		project_root <- getOption("epimodFBAfunctionsGUI.user_proj",
 				                      normalizePath("~"))
 		roots <- c(Home = "~", Project = project_root)
@@ -1348,22 +1359,26 @@ observe({
 				}, ignoreInit = TRUE)
 			})
 		})
-		
+				
 		reset_state <- function() {
-			# 1) pulizia della cartella temporanea config/
+
+			## 0) chiudo qualunque modal residuo
+			close_all_modals(); removeModal()      # fallback per l’ultimo aperto
+
+			## 1) pulizia cartella config/
 			cfg <- cfg_dir_path()
 			if (!is.null(cfg) && dir.exists(cfg)) unlink(cfg, recursive = TRUE)
 			cfg_dir_path(NULL)
 
-			# 2) azzera TUTTE le reactive values
+			## 2) azzera i reactive
 			work_valid(FALSE);  mat_valid(FALSE)
 			working_dir(NULL);  matfile_dir(NULL)
 			hypernode_name(NULL)
 			unit_cfgs(list());  meta_cache(list());  current(1)
 			selected_bmet(character())
 
-			# 3) ripristina i default globali  (stessi campi dell’inizializzazione!)
-			global_cfg(list(
+			## 3) default globali
+			defaults <- list(
 				biomass                    = list(max = 1, mean = 1, min = 0),
 				population                 = list(starv = 0, dup = 1, death = 0),
 				volume                     = 0.001,
@@ -1373,15 +1388,29 @@ observe({
 				projected_upper_bound      = 1000,
 				not_projected_lower_bound  = 1000,
 				not_projected_upper_bound  = 1000
-			))
+			)
+			global_cfg(defaults)
 
-			# 4) reset UI filtri / search
-			updateTextInput(session,  ns("bsearch"),      value = "")
+			## 3-bis) aggiorna anche i campi numerici mostrati a video
+			num_ids <- c(
+				global_b_max      = 1,  global_b_mean     = 1,  global_b_min  = 0,
+				global_p_starv    = 0,  global_p_dup      = 1,  global_p_death= 0,
+				global_init_count = 1e6,
+				global_volume     = 0.001,  global_cell_density = 1e10,
+				global_proj_lb    = 1000, global_proj_ub  = 1000,
+				global_nproj_lb   = 1000, global_nproj_ub = 1000
+			)
+			for (id in names(num_ids))
+				updateNumericInput(session, id, value = num_ids[[id]])
+
+			## 4) reset UI filtri / search
+			updateTextInput(session,  ns("bsearch"), value = "")
 			updateCheckboxGroupInput(session, ns("model_filter"), selected = "All")
 
-			# 5) forza il rebuild del top-card
+			## 5) forza il rebuild del top-card
 			reset_flag(TRUE)
 		}
+
 
 
 		
