@@ -37,7 +37,7 @@ body{
   margin:2rem auto;                 /* margine verticale               */
   background:var(--q-blue-050);
   border:4px solid var(--q-gray-700);
-  /*border-radius:1rem;*/
+  border-radius:1rem;
   box-shadow:0 6px 18px rgba(0,0,0,.08);
   display:flex;
   flex-direction:column;
