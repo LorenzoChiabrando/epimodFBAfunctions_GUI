@@ -59,7 +59,10 @@ simulationServer <- function(id) {
     models     <- shiny::reactiveVal(character())
     reset_flag <- shiny::reactiveVal(FALSE)
     session_files <- reactiveValues(proj = NULL, nproj = NULL)
-    
+    cfg_root <- reactiveVal(NULL)   # path alla configurazione corrente
+		need_regenerate <- shiny::reactiveVal(FALSE)
+		old_struct      <- shiny::reactiveVal(NULL)
+
 	    # ──────────────────────────────────────────────────────────────────────
     # ①  CACHE PER-MODEL DATA 
     # ──────────────────────────────────────────────────────────────────────
@@ -92,8 +95,18 @@ simulationServer <- function(id) {
 		}
 
 		## scrive il CSV partendo dal DF “single-column” ------------------------
+		## ════════════════════════════════════════════════════════════════════════════
+		##  Riscrive il CSV ma preserva tutte le colonne che NON stiamo editando
+		##  (p. es. ‘system_volume’).  Chiave = reaction + FBAmodel.
+		## ════════════════════════════════════════════════════════════════════════════
 		rebuild_bounds_csv_single <- function(csv_path, slot_name) {
 
+			## 1) snapshot dell’eventuale file già presente ────────────────────────────
+			old_df <- if (file.exists(csv_path))
+				          read.csv(csv_path, stringsAsFactors = FALSE)
+				        else NULL
+
+			## 2) dataframe “long” ricostruito dalla cache (come prima) ────────────────
 			long <- purrr::map_dfr(names(node_data()), function(mdl) {
 				wide <- node_data()[[mdl]][[slot_name]]
 				if (!nrow(wide)) return(NULL)
@@ -106,8 +119,147 @@ simulationServer <- function(id) {
 				)
 			})
 
-			if (nrow(long))
-				write.csv(long, csv_path, row.names = FALSE, quote = FALSE)
+			if (!nrow(long)) return()               # niente da scrivere
+
+			## 3) Re-innesto delle colonne extra (se presenti) ─────────────────────────
+			if (!is.null(old_df)) {
+				extra_cols <- setdiff(names(old_df),
+				                      c("reaction", "FBAmodel", "background_conc"))
+				if (length(extra_cols)) {
+				  long <- merge(long,
+				                old_df[ , c("reaction", "FBAmodel", extra_cols), drop = FALSE],
+				                by      = c("reaction", "FBAmodel"),
+				                all.x   = TRUE,
+				                sort    = FALSE)
+				}
+			}
+
+			## 4) Ordine colonne: come nel file originale, se lo conosciamo ────────────
+			if (!is.null(old_df)) {
+				# mantieni solo le colonne che realmente esistono in ‘long’
+				keep <- names(old_df)[ names(old_df) %in% names(long) ]
+				long <- long[ , keep, drop = FALSE]
+			}
+
+			## 5) Scrivi il CSV definitivo ─────────────────────────────────────────────
+			write.csv(long, csv_path, row.names = FALSE, quote = FALSE)
+		}
+
+		get_cfg_root <- function() {
+			isolate(cfg_root()) %||%
+				shinyFiles::parseDirPath(roots, input$hypernode_dir)
+		}
+		
+		# ─────────────────────────────────────────────────────────────────────────────
+		#  Salva snapshot in .default_conf
+		# ─────────────────────────────────────────────────────────────────────────────
+		save_default_conf <- function(base_dir) {
+			cfg_dir  <- file.path(base_dir, "config")
+			yml_file <- list.files(cfg_dir, "\\.ya?ml$", full.names = TRUE)[1]
+			yml      <- if (length(yml_file)) yaml::read_yaml(yml_file) else list()
+			bm_defs  <- yml$boundary_metabolites %||% character()
+			met_ids  <- gsub("[^A-Za-z0-9_]", "_", bm_defs)
+
+			default_dir <- file.path(base_dir, ".default_conf")
+			if (!dir.exists(default_dir)) dir.create(default_dir, recursive = TRUE)
+
+			# copia i CSV GUI-temp
+			for(slot in c("proj","nproj")) {
+				src <- session_files[[slot]]; dst <- file.path(default_dir, basename(src))
+				if (file.exists(src)) file.copy(src, dst, overwrite = TRUE)
+			}
+
+			# costruisci la lista dei valori
+			bc_list <- setNames(
+				lapply(met_ids, function(id) input[[paste0("conc_", id)]]),
+				bm_defs
+			)
+			snap <- list(
+				times      = list(
+				  initial_time = input$i_time,
+				  final_time   = input$f_time,
+				  step_size    = input$s_time
+				),
+				tolerances = list(atol = input$atol, rtol = input$rtol),
+				boundary_concentrations = bc_list,
+				system_parameters = list(
+				  projected_upper_bound = input$fba_ub,
+				  projected_lower_bound = input$fba_lb,
+				  background_met  = input$background_met,
+				  background_met_lb  = input$background_met_lb,
+				  volume          = input$sys_volume,
+				  cell_density    = input$cell_density
+				),
+				models = lapply(node_data(), function(info) list(
+				  params          = info$params,
+				  population      = info$population,
+				  initial_biomass = info$initial_biomass
+				))
+			)
+
+			# salva JSON + YAML
+			jsonlite::write_json(snap,
+				file.path(default_dir, "default_values.json"),
+				auto_unbox = TRUE, pretty = TRUE
+			)
+			yaml::write_yaml(snap,
+				file.path(default_dir, "default_values.yaml")
+			)
+			message("[save_default_conf] snapshot in .default_conf aggiornata")
+		}
+
+		# ─────────────────────────────────────────────────────────────────────────────
+		#  Carica snapshot da .default_conf (se esiste)
+		# ─────────────────────────────────────────────────────────────────────────────
+		load_default_conf <- function(base_dir) {
+			default_dir <- file.path(base_dir, ".default_conf")
+			if (!dir.exists(default_dir)) return()  # niente da fare
+
+			# 1) copia indietro i CSV GUI-temp
+			for(slot in c("proj","nproj")) {
+				src <- file.path(default_dir, basename(session_files[[slot]]))
+				dst <- session_files[[slot]]
+				if (file.exists(src)) file.copy(src, dst, overwrite = TRUE)
+			}
+
+			# 2) ricarica node_data sui bounds
+			proj_df  <- read.csv(session_files$proj,  stringsAsFactors = FALSE)
+			nproj_df <- read.csv(session_files$nproj, stringsAsFactors = FALSE)
+			nd <- lapply(models(), function(mdl) {
+				list(
+				  params          = node_data()[[mdl]]$params,
+				  population      = node_data()[[mdl]]$population,
+				  initial_biomass = node_data()[[mdl]]$initial_biomass,
+				  projected       = make_bounds_single(proj_df, mdl),
+				  nonprojected    = make_bounds_single(nproj_df, mdl)
+				)
+			})
+			names(nd) <- models()
+			node_data(nd)
+
+			# 3) ricarica i numericInputs dal JSON
+			def <- jsonlite::fromJSON(file.path(default_dir, "default_values.json"))
+			updateNumericInput(session, "i_time", value = def$times$initial_time)
+			updateNumericInput(session, "f_time", value = def$times$final_time)
+			updateNumericInput(session, "s_time", value = def$times$step_size)
+			updateNumericInput(session, "atol",   value = def$tolerances$atol)
+			updateNumericInput(session, "rtol",   value = def$tolerances$rtol)
+			for(id in names(def$boundary_concentrations)) {
+				updateNumericInput(
+				  session,
+				  paste0("conc_", gsub("[^A-Za-z0-9_]","_", id)),
+				  value = def$boundary_concentrations[[id]]
+				)
+			}
+			sp <- def$system_parameters
+			updateNumericInput(session, "fba_ub",       value = sp$projected_upper_bound)
+			updateNumericInput(session, "fba_lb",       value = sp$projected_lower_bound)
+			updateNumericInput(session, "background_met",value = sp$background_met)
+			updateNumericInput(session, "background_met_lb",value = sp$background_met_lb)
+			updateNumericInput(session, "sys_volume",   value = sp$volume)
+			updateNumericInput(session, "cell_density", value = sp$cell_density)
+
+			message("[load_default_conf] valori caricati da .default_conf")
 		}
 
 
@@ -118,7 +270,8 @@ simulationServer <- function(id) {
 		observeEvent(dir_valid(), ignoreInit = TRUE, {
 			req(dir_valid())
 
-			base_dir <- shinyFiles::parseDirPath(roots, input$hypernode_dir)
+			base_dir <- get_cfg_root()
+
 			cfg_dir  <- file.path(base_dir, "config")
 			out_dir  <- file.path(base_dir, "output")
 
@@ -184,38 +337,213 @@ simulationServer <- function(id) {
 
 			names(info_list) <- models()
 			node_data(info_list)
+			
+			sync_setup(yml)   # <— registra observer una sola volta
+
+			load_default_conf(base_dir)
 
 		})
 
+		## ────────────────────────────────────────────────────────────────────
+		##  CARTELLA HYPERNODE / CONFIG - gestione avanzata
+		## ────────────────────────────────────────────────────────────────────
+		observeEvent(input$hypernode_dir, {
+			root_path <- shinyFiles::parseDirPath(roots, input$hypernode_dir)
+			if (length(root_path) == 0) return()
 
+			required <- c("biounits", "config", "gen", "output", "petri_net", "src")
+			has_all_subdirs <- function(p) all(dir.exists(file.path(p, required)))
 
-    # Observe directory selection
-    shiny::observeEvent(input$hypernode_dir, {
-      path <- shinyFiles::parseDirPath(roots, input$hypernode_dir)
-      if (length(path) == 0) return()
+			proceed_with_config <- function(cfg_path) {
+				cfg_root(cfg_path)          # memorizza il nuovo path
+				dir_valid(TRUE)
+				mdl <- list.dirs(file.path(cfg_path, "biounits"),
+				                 full.names = FALSE, recursive = FALSE)
+				models(mdl)
+			}
 
-      # Validate subdirectories
-      required <- c("biounits", "config", "gen", "output", "petri_net", "src")
-      missing  <- required[!base::dir.exists(file.path(path, required))]
-      if (length(missing) == 0) {
-        dir_valid(TRUE)
-        mdl <- list.dirs(file.path(path, "biounits"), full.names = FALSE, recursive = FALSE)
-        models(mdl)
-      } else {
-        dir_valid(FALSE)
-        models(character())
+			## ── ①  se hanno già la struttura richiesta (e non è .base) -----------
+			if (has_all_subdirs(root_path) && basename(root_path) != ".base") {
+				message("[DEBUG] single config folder selected: ", root_path)
+				proceed_with_config(root_path)
+				return()
+			}
+
+			## ── ②  altrimenti siamo su un hypernode: elenco configurazioni valide ---
+			subdirs <- list.dirs(root_path, full.names = TRUE, recursive = FALSE)
+			valid   <- subdirs[vapply(subdirs, has_all_subdirs, logical(1))]
+
+			## escludi sempre la cartella nascosta .base
+			valid <- valid[basename(valid) != ".base"]
+
+			## ────────────────────────────────────────────────────────────────────────
+			## DEBUG: stampo cosa ho trovato in `valid`
+			## ────────────────────────────────────────────────────────────────────────
+			message("[DEBUG] root_path: ", root_path)
+			message("[DEBUG] all subdirs: ", paste(basename(subdirs), collapse = ", "))
+			message("[DEBUG] valid configs (full paths): ", paste(valid, collapse = ", "))
+			message("[DEBUG] valid config names: ", paste(basename(valid), collapse = ", "))
+			## ────────────────────────────────────────────────────────────────────────
+
+			if (!length(valid)) {
 				showModal(modalDialog(
-					title   = "Invalid Directory",
-					HTML(paste0(
-						"<p>The selected folder is not a valid hypernode because the following subfolders are missing:</p>",
-						"<ul>", paste0("<li>", missing, "</li>", collapse = ""), "</ul>"
-					)),
-					easyClose = TRUE,
-					footer    = modalButton("OK"),
-					class     = "modal-sim-invalid"
+				  title   = "Invalid Directory",
+				  HTML("<p>The selected folder is not a hypernode nor contains valid configurations.</p>"),
+				  easyClose = TRUE, footer = modalButton("OK")
 				))
+				return()
+			}
+
+			conf_names  <- basename(valid)
+			names(valid) <- conf_names
+			new_conf_id <- "__NEW_CONFIG__"
+
+			showModal(modalDialog(
+				title   = "Select configuration",
+				selectInput(ns("choose_cfg"), "Configuration:",
+				            choices = c(conf_names, "➕ Create new…" = new_conf_id)),
+				footer = tagList(
+				  modalButton("Cancel"),
+				  actionButton(ns("confirm_cfg"), "Continue", class = "btn-primary")
+				),
+				easyClose = FALSE
+			))
+
+observeEvent(input$confirm_cfg, ignoreInit = TRUE, {
+  removeModal()
+  sel <- input$choose_cfg
+  message("[DEBUG confirm_cfg] user selected: '", sel, "'")
+
+  if (is.null(sel)) {
+    message("[DEBUG confirm_cfg] sel is NULL, returning")
+    return()
+  }
+
+  # ── Ricalcola lista di configurazioni valide ─────────────────────────────
+  subdirs    <- list.dirs(root_path, full.names = TRUE, recursive = FALSE)
+  valid_dirs <- subdirs[vapply(subdirs, has_all_subdirs, logical(1))]
+  valid_dirs <- valid_dirs[!basename(valid_dirs) %in% c(".base", ".default_conf")]
+  names(valid_dirs) <- basename(valid_dirs)
+  message("[DEBUG confirm_cfg] current valid configs: ",
+          paste(names(valid_dirs), collapse = ", "))
+
+  # ── Configurazione esistente? ───────────────────────────────────────────
+  if (sel != new_conf_id) {
+    if (!sel %in% names(valid_dirs)) {
+      showNotification("Configurazione non valida.", type = "error")
+      message("[DEBUG confirm_cfg] sel not in valid_dirs: ", sel)
+      return()
+    }
+    message("[DEBUG confirm_cfg] loading existing config: ", sel,
+            " → ", valid_dirs[[sel]])
+    proceed_with_config(valid_dirs[[sel]])
+    return()
+  }
+
+  # ── Altrimenti: clonazione da .base ─────────────────────────────────────
+  base_dir <- file.path(root_path, ".base")
+  if (!has_all_subdirs(base_dir)) {
+    showNotification("La cartella nascosta '.base' manca o è invalida.",
+                     type = "error")
+    return()
+  }
+
+  # Chiedo il nome della nuova config
+  default_name <- sprintf("conf_%s", format(Sys.time(), "%Y%m%d_%H%M%S"))
+  showModal(modalDialog(
+    title     = "New configuration",
+    textInput(ns("new_cfg_name"), "Name:", value = default_name),
+    footer    = tagList(
+      modalButton("Cancel"),
+      actionButton(ns("create_cfg"), "Create", class = "btn-primary")
+    ),
+    easyClose = FALSE
+  ))
+
+  observeEvent(input$create_cfg, ignoreInit = TRUE, {
+    cfg_name <- trimws(input$new_cfg_name)
+    message("[DEBUG create_cfg] requested new config name: '", cfg_name, "'")
+    if (cfg_name == "" || grepl("[/\\\\]", cfg_name)) {
+      showNotification("Invalid name.", type = "error")
+      message("[DEBUG create_cfg] invalid name, aborting")
+      return()
+    }
+
+    new_dir <- file.path(root_path, cfg_name)
+    if (dir.exists(new_dir)) {
+      showNotification("A configuration with that name already exists.",
+                       type = "error")
+      message("[DEBUG create_cfg] target dir already exists: ", new_dir)
+      return()
+    }
+
+    # Clono da .base
+    message("[DEBUG create_cfg] creating new configuration at: ", new_dir)
+    dir.create(new_dir)
+    file.copy(
+      list.files(base_dir, full.names = TRUE),
+      new_dir, recursive = TRUE
+    )
+
+    # Rinomina *_base → *_<cfg_name>
+    files <- list.files(new_dir, recursive = TRUE, full.names = TRUE)
+    for (f in files) {
+      old <- basename(f)
+      new <- sub("_base", paste0("_", cfg_name), old, fixed = TRUE)
+      if (new != old) {
+        file.rename(f, file.path(dirname(f), new))
+        message("[DEBUG create_cfg] renamed ", old, " → ", new)
       }
-    })
+    }
+
+    # Rigenero il .fbainfo per la nuova config
+    {
+    
+      showModal(modalDialog(
+        title  = NULL,
+        tagList(
+          div(style="text-align:center;",
+              img(src = "running.png", height = "400px", alt = "Running…")),
+          br(),
+          div("Your new configuration is being prepared. Please wait while the system completes the setup...",
+              style = "text-align:center; font-weight:bold;")
+        ),
+        footer    = NULL,
+        easyClose = FALSE,
+        size      = "l"
+      ))
+
+      gen_dir    <- file.path(new_dir, "gen")
+      net_file   <- list.files(
+        file.path(new_dir, "petri_net"),
+        "\\.PNPRO$", full.names = TRUE
+      )
+      trans_file <- list.files(
+        file.path(new_dir, "src"),
+        "\\.cpp$", full.names = TRUE
+      )[1]
+      fba_files  <- list.files(
+        file.path(new_dir, "biounits"),
+        "\\.txt$", full.names = TRUE, recursive = TRUE
+      )
+
+      message("[SIM] Rigenero il .fbainfo per la nuova config…")
+      epimodFBAfunctions::model_generation_GUI(
+        net_fname         = net_file,
+        transitions_fname = trans_file,
+        fba_fname         = fba_files,
+        output_dir        = gen_dir
+      )
+      message("[SIM] .fbainfo rigenerato con successo")
+    }
+
+    removeModal()
+    proceed_with_config(new_dir)
+  })
+	})
+}, ignoreNULL = TRUE)
+
+
 
     # Reset handler
 		observeEvent(input$btn_reset, {
@@ -362,7 +690,7 @@ simulationServer <- function(id) {
 		# Directory selector UI
 		output$dir_selector <- renderUI({
 			if (dir_valid() && !reset_flag()) {
-				path <- shinyFiles::parseDirPath(roots, input$hypernode_dir)
+				path <- get_cfg_root()
 				div(class = "sim-section-card directory",
 
 				  # Current directory display
@@ -447,43 +775,105 @@ simulationServer <- function(id) {
 				      )
 				    })
 				  ),
-				  
-				#	div(class = "mt-2 d-flex gap-2",
-				#			shinyFiles::shinyDirButton(
-				#				id    = ns("export_dir"),
-				#				label = "Save bounds…",
-				#				title = "Copy the *_gui.csv files to a folder you choose",
-				#				icon  = icon("download"),
-				#				class = "btn btn-outline-secondary btn-sm"
-				#			),
-				#			shinyFiles::shinyFilesButton(        # ←--- correct name
-				#				id    = ns("load_proj"),
-				#				label = "Load projected…",
-				#				title = "Pick a CSV to replace ub_bounds_projected_gui.csv",
-				#				multiple = FALSE,
-				#				icon  = icon("file-upload"),
-				#				class = "btn btn-outline-secondary btn-sm"
-				#			),
-				#			shinyFiles::shinyFilesButton(        # ←--- correct name
-				#				id    = ns("load_nproj"),
-				#				label = "Load not-projected…",
-				#				title = "Pick a CSV to replace ub_bounds_not_projected_gui.csv",
-				#				multiple = FALSE,
-				#				icon  = icon("file-upload"),
-				#				class = "btn btn-outline-secondary btn-sm"
-				#			)
-				#	)
-
 				)
 			}
 		})
 
 
+		# ── helper: default from node_data()  (unchanged) ---------------------------
+		get_default_conc <- function(met) {
+			nd <- isolate(node_data())
+			if (is.null(nd) || !length(nd)) return(0)
+			for (mdl in names(nd)) {
+				df <- nd[[mdl]]$projected
+				if (!nrow(df)) next
+				idx <- which(df$reaction == paste0("EX_", met, "_r"))
+				if (length(idx)) {
+				  val <- df$background_conc[idx[1]]
+				  if (!is.na(val)) return(val)
+				}
+			}
+			0
+		}
+
+		# ── utility: write new value into *all* models ------------------------------
+		propagate_to_all_models <- function(reaction, new_val) {
+			nd    <- node_data()
+			dirty <- FALSE
+			for (mdl in names(nd)) {
+				df  <- nd[[mdl]]$projected
+				idx <- which(df$reaction == reaction)
+				if (length(idx) && !isTRUE(all.equal(df$background_conc[idx], new_val))) {
+				  message("[SYNC] ", reaction, " for ", mdl, " ← ", new_val)
+				  df$background_conc[idx] <- new_val
+				  nd[[mdl]]$projected     <- df
+				  dirty <- TRUE
+				}
+			}
+			if (dirty) {
+				node_data(nd)                              # trigger reactives
+				rebuild_bounds_csv_single(session_files$proj, "projected")
+			}
+		}
+
+		# ──  main synchronisation registrator  --------------------------------------
+		sync_setup <- function(yml) {
+			bm_defs <- yml$boundary_metabolites %||% character()
+			met_ids <- gsub("[^A-Za-z0-9_]", "_", bm_defs)
+
+			if (!exists(".sync_reg", envir = session$userData))
+				session$userData$.sync_reg <- character()
+
+			for (i in seq_along(bm_defs)) {
+				## copy-in-loop to avoid late binding
+				local({
+				  met       <- bm_defs[i]
+				  met_id    <- met_ids[i]
+				  input_id  <- paste0("conc_", met_id)
+				  reaction  <- paste0("EX_", met, "_r")
+
+				  if (input_id %in% session$userData$.sync_reg) return(NULL)
+
+				  # A) numericInput  → all models
+				  observeEvent(input[[input_id]], ignoreInit = TRUE, {
+				    new_val <- input[[input_id]]
+				    message("[EDIT] ", input_id, " → ", new_val)
+				    propagate_to_all_models(reaction, new_val)
+				  }, ignoreNULL = TRUE)
+
+				  # B) any model bounds → numericInput
+				  observeEvent(node_data(), {
+				    isolate({
+				      nd <- node_data()
+				      for (mdl in names(nd)) {
+				        df <- nd[[mdl]]$projected
+				        idx <- which(df$reaction == reaction)
+				        if (length(idx)) {
+				          val <- df$background_conc[idx[1]]
+				          cur <- isolate(input[[input_id]])
+				          if (!isTRUE(all.equal(cur, val))) {
+				            message("[SYNC] update ", input_id, " ← ", val)
+				            updateNumericInput(session, input_id, value = val)
+				          }
+				          break
+				        }
+				      }
+				    })
+				  }, ignoreInit = TRUE)
+
+				  session$userData$.sync_reg <- c(session$userData$.sync_reg, input_id)
+				}) # /local
+			}
+		}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+
 		# Simulation configuration inputs & Run handler
 		output$sim_controls <- renderUI({
 			if (!dir_valid()) return(NULL)
 			ns    <- session$ns
-			base  <- shinyFiles::parseDirPath(roots, input$hypernode_dir)
+			base  <- get_cfg_root()
 			cfg_dir <- file.path(base, "config")
 			
 			# 1) Read boundary metabolites from YAML
@@ -494,11 +884,13 @@ simulationServer <- function(id) {
 			# 2) Read system defaults from JSON
 			json_f <- file.path(cfg_dir, "boundary_conditions.json")
 			jsn    <- if (file.exists(json_f)) jsonlite::fromJSON(json_f) else list()
-			default_fba_ub       <- jsn$fba_upper_bound  %||% 1000
-			default_fba_lb       <- jsn$fba_lower_bound  %||% -1000
-			default_background   <- jsn$background_met    %||% 1000
-			default_volume       <- jsn$volume            %||% 0.001
-			default_cell_density <- jsn$cell_density      %||% 1e10
+			default_fba_ub       <- jsn$projected_upper_bound  %||% 1000
+			default_fba_lb       <- jsn$projected_lower_bound  %||%  1000
+			default_background   <- jsn$background_met   			 %||% 1000
+			default_background_lb   <- jsn$background_met_lb   %||% 1000
+			default_volume       <- jsn$volume            		 %||% 0.001
+			default_cell_density <- jsn$cell_density      		 %||% 1e10
+
 
 			div(class = "sim-section-card config",
 				
@@ -536,7 +928,7 @@ simulationServer <- function(id) {
 				        numericInput(
 				          ns(paste0("conc_", met_id)),
 				          label = met,
-				          value = 0,
+				          value = get_default_conc(met),
 				          min   = 0,
 				          width = "30%"
 				        )
@@ -544,52 +936,47 @@ simulationServer <- function(id) {
 				    )
 				  )
 				},
-				
 			## ──────────────── System Parameters (temporarily hidden) ────────────────
-			# ──────────────── System Parameters (hidden) ────────────────
-# instead of directly emitting the inputs, wrap them in a conditionalPanel
-# whose JavaScript condition is always false:
-conditionalPanel(
-  condition = "false", 
-  div(
-    hr(),
-    h5(
-      "System Parameters",
-      span(
-        icon("question-circle"), 
-        style = "cursor:help; margin-left:8px;",
-        title = "Default system parameters."
-      ),
-      class = "sim-section-title"
-    ),
-    fluidRow(
-      column(4,
-        numericInput(ns("fba_ub"), "FBA Upper Bound (mmol/h)",
-                     value = default_fba_ub, min = 0, width = "60%")
-      ),
-      column(4,
-        numericInput(ns("fba_lb"), "FBA Lower Bound (mmol/h)",
-                     value = default_fba_lb, width = "60%")
-      ),
-      column(4,
-        numericInput(ns("background_met"), "Background met (mmol)",
-                     value = default_background, min = 0, width = "60%")
-      )
-    ),
-    fluidRow(
-      column(4,
-        numericInput(ns("sys_volume"), "System Volume (mL)",
-                     value = default_volume, min = 0, width = "60%")
-      ),
-      column(4,
-        numericInput(ns("cell_density"), "Initial Cell Density (cells/mL)",
-                     value = default_cell_density, min = 0, width = "60%")
-      )
-    )
-  )
-),
-
-
+					div(
+						hr(),
+						h5(
+							"System Parameters",
+							span(
+								icon("question-circle"), 
+								style = "cursor:help; margin-left:8px;",
+								title = "Default system parameters."
+							),
+							class = "sim-section-title"
+						),
+						fluidRow(
+							column(4,
+								numericInput(ns("fba_ub"), "Projected Upper Bound",
+								             value = default_fba_ub, min = 0, width = "60%")
+							),
+							column(4,
+								numericInput(ns("fba_lb"), "Projected Lower Bound",
+								             value = default_fba_lb, width = "60%")
+							),
+							column(4,
+								numericInput(ns("background_met"), "Non Projected Upper Bound",
+								             value = default_background, min = 0, width = "60%")
+							),
+							column(4,
+								numericInput(ns("background_met_lb"), "Non Projected Upper Bound",
+								             value = default_background, min = 0, width = "60%")
+							)
+						),
+						fluidRow(
+							column(4,
+								numericInput(ns("sys_volume"), "System Volume (mL)",
+								             value = default_volume, min = 0, width = "60%")
+							),
+							column(4,
+								numericInput(ns("cell_density"), "Initial Cell Density (cells/mL)",
+								             value = default_cell_density, min = 0, width = "60%")
+							)
+						)
+					),
 				# Run button row
 				fluidRow(
 				  column(12,
@@ -602,197 +989,242 @@ conditionalPanel(
 			)
 		})
 
-		## ─────────────────────────────────────────────────────────────────────────────
-##  RUN SIMULATION BUTTON
-## ─────────────────────────────────────────────────────────────────────────────
+		## ─────────────────────────────────────────────────────────────
+		##  RUN SIMULATION & OPTIONAL REGENERATION
+		## ─────────────────────────────────────────────────────────────
+
+		pre_check_models <- function() {
+			regenerate_needed <- FALSE
+			base   <- get_cfg_root()
+			nd     <- node_data()
+			for (mdl in names(nd)) {
+				biounit_d <- file.path(base, "biounits", mdl)
+				txt_file  <- list.files(biounit_d, "_model\\.txt$", full.names = TRUE)[1]
+				if (!file.exists(txt_file)) next
+				lines <- readLines(txt_file)
+				params <- nd[[mdl]]$params
+				# expected on lines 5,6,7
+				new_vals <- c(as.character(params$bioMax),
+				              as.character(params$bioMean),
+				              as.character(params$bioMin))
+				old_vals <- lines[5:7]
+				if (!all(old_vals == new_vals)) {
+				  # patch the file
+				  lines[5:7] <- new_vals
+				  writeLines(lines, txt_file)
+				  message(sprintf("[DEBUG] Patched %s lines 5–7: %s", basename(txt_file), paste(new_vals, collapse="/")))
+				  regenerate_needed <- TRUE
+				}
+			}
+			regenerate_needed
+		}
+		
+		# 1) Utility: patch JSON, optionally regenerate model, then run analysis
+		run_simulation <- function(regenerate = FALSE) {
+		
+			regen_from_params <- pre_check_models()
+			if (regen_from_params) {
+				message("[DEBUG] FBA models out of sync with GUI parameters → forcing regeneration")
+				regenerate <- TRUE
+				showNotification("Detected parameter changes → regenerating FBA models", type="warning")
+			}
+			base       <- get_cfg_root()
+			config_dir <- file.path(base, "config")
+			petri_dir  <- file.path(base, "petri_net")
+			src_dir    <- file.path(base, "src")
+			biounits   <- file.path(base, "biounits")
+			gen_dir    <- file.path(base, "gen")
+
+			# A) Patch boundary_conditions.json
+			bc_path <- file.path(config_dir, "boundary_conditions.json")
+			if (file.exists(bc_path)) {
+				bc <- jsonlite::fromJSON(bc_path, simplifyVector = FALSE)
+				bc$volume       <- input$sys_volume
+				bc$cell_density <- input$cell_density
+				jsonlite::write_json(bc, bc_path, auto_unbox = TRUE, pretty = TRUE)
+			}
+
+			# B) Regenerate FBA‐model if requested
+			if (regenerate) {
+				showModal(modalDialog(
+				  title     = NULL,
+				  tagList(
+				    div(style="text-align:center;", img(src="running.png", height="400px")),
+				    br(),
+				    div("Regenerating model… please wait", style="text-align:center; font-weight:bold;")
+				  ),
+				  footer    = NULL, easyClose = FALSE, size = "l"
+				))
+
+				# Patch C++ stub
+				cpp_files <- list.files(src_dir, "\\.cpp$", full.names = TRUE)
+				if (length(cpp_files)) {
+				  gui_cpp <- cpp_files[[1]]
+				  lines   <- readLines(gui_cpp)
+				  lines   <- sub("double V = .*?;",
+				                 sprintf("double V = %g;", input$sys_volume),
+				                 lines)
+				  lines   <- sub("long long int delta = .*?;",
+				                 sprintf("long long int delta = %g;", input$cell_density),
+				                 lines)
+				  writeLines(lines, gui_cpp)
+				}
+
+				# model_generation_GUI
+				net_file   <- list.files(petri_dir, "\\.PNPRO$", full.names = TRUE)
+				trans_file <- list.files(src_dir, "\\.cpp$",   full.names = TRUE)[1]
+				fba_txts   <- list.files(biounits, "\\.txt$",  full.names = TRUE, recursive = TRUE)
+				epimodFBAfunctions::model_generation_GUI(
+				  net_fname         = net_file,
+				  transitions_fname = trans_file,
+				  fba_fname         = fba_txts,
+				  output_dir        = gen_dir
+				)
+				removeModal()
+			}
+
+			# C) Build GUI‐snapshot YAML
+			hn_name   <- basename(dirname(base))
+			cfg_name  <- basename(base)
+			hypernode <- paste(hn_name, cfg_name, sep = "_")
+
+			orig_yml_path <- list.files(config_dir, "\\.ya?ml$", full.names = TRUE)[1]
+			gui_yml       <- if (length(orig_yml_path)) yaml::read_yaml(orig_yml_path) else list()
+
+			gui_yml$simulation <- list(
+				initial_time       = input$i_time,
+				final_time         = input$f_time,
+				step_size          = input$s_time,
+				absolute_tolerance = input$atol,
+				relative_tolerance = input$rtol
+			)
+			bm_defs <- gui_yml$boundary_metabolites %||% character()
+			if (length(bm_defs)) {
+				met_ids <- gsub("[^A-Za-z0-9_]", "_", bm_defs)
+				gui_yml$simulation$boundary_concentrations <- setNames(
+				  lapply(met_ids, function(id) input[[paste0("conc_", id)]]),
+				  bm_defs
+				)
+			}
+			gui_yml$simulation$system_parameters <- list(
+				fba_upper_bound = input$fba_ub,
+				fba_lower_bound = input$fba_lb,
+				background_met  = input$background_met,
+				volume          = input$sys_volume,
+				cell_density    = input$cell_density
+			)
+
+			gui_yaml_path <- file.path(config_dir, paste0(hypernode, "_gui.yaml"))
+			yaml::write_yaml(gui_yml, gui_yaml_path)
+
+			# D) Launch analysis
+			showModal(modalDialog(
+				title     = NULL,
+				tagList(
+				  div(style="text-align:center;", img(src="running.png", height="400px")),
+				  br(),
+				  div("Running simulation and analysis…", style="text-align:center; font-weight:bold;")
+				),
+				footer    = NULL, easyClose = FALSE, size = "l"
+			))
+
+			tryCatch({
+				debug_paths <- c(
+				  gen    = file.path(base, "gen"),
+				  config = config_dir,
+				  src    = file.path(base, "src"),
+				  output = file.path(base, "output")
+				)
+				fba_files  <- list.files(file.path(base, "biounits"), "\\.txt$", full.names = TRUE, recursive = TRUE)
+				user_files <- c(
+				  file.path(config_dir, "population_parameters.csv"),
+				  file.path(base, "gen",    paste0(hypernode, ".fbainfo")),
+				  file.path(base, "output", "ub_bounds_projected_gui.csv"),
+				  file.path(base, "output", "non_projected_bounds_gui.csv")
+				)
+
+				epimodFBAfunctions::model_analysis_GUI(
+				  paths           = debug_paths,
+				  hypernode_name  = hypernode,
+				  debug_solver    = FALSE,
+				  i_time          = input$i_time,
+				  f_time          = input$f_time,
+				  s_time          = input$s_time,
+				  atol            = input$atol,
+				  rtol            = input$rtol,
+				  fba_fname       = fba_files,
+				  user_files      = user_files,
+				  volume          = base
+				)
+
+				removeModal()
+				showModal(modalDialog(
+				  title = "✅ Simulation & Analysis Complete",
+				  tagList(
+				    div(style="text-align:center;", img(src="success.png", height="400px")),
+				    br(),
+				    div("Your model has been generated and analyzed successfully.", style="text-align:center; font-weight:bold;"),
+				    br(),
+				    div("What next?", style="text-align:center;")
+				  ),
+				  footer = tagList(
+				    actionButton(ns("btn_visualize"), "Visualize Results", class="btn-primary"),
+				    actionButton(ns("btn_new_sim"),   "New Simulation",   class="btn-secondary")
+				  ),
+				  easyClose = FALSE, size = "l"
+				))
+				session$userData$last_hypernode <- base
+
+			}, error = function(err) {
+				removeModal()
+				showModal(modalDialog(
+				  title = "❌ Simulation Error",
+				  tagList(
+				    div(style="text-align:center;", img(src="error.png", height="400px")),
+				    br(),
+				    div(paste("An error occurred:", err$message), style="text-align:center; color:red; font-weight:bold;")
+				  ),
+				  easyClose = TRUE, footer = modalButton("Close"), size = "l"
+				))
+			}, finally = {
+				save_default_conf(base)
+				unlink(c(session_files$proj, session_files$nproj), force = TRUE)
+				unlink(gui_yaml_path, force = TRUE)
+				unlink(list.files(src_dir, "*_gui\\.(R|cpp)$", full.names = TRUE), force = TRUE)
+			})
+		}
+
+		# 2) Run button → if sys-params changed ask; otherwise run directly
 observeEvent(input$btn_run_sim, {
+  bc_path <- file.path(get_cfg_root(), "config", "boundary_conditions.json")
+  old_bc  <- if (file.exists(bc_path)) jsonlite::fromJSON(bc_path) else list()
+  old_vol <- old_bc$volume; old_den <- old_bc$cell_density
 
-  ## 0)  Modal “Running…”
-  showModal(
-    modalDialog(
-      title  = NULL,
-      tagList(
-        div(style = "text-align:center;",
-            img(src = "running.png", height = "400px", alt = "Running…")),
-        br(),
-        div("Running simulation and analysis…",
-            style = "text-align:center; font-weight:bold;")
+  if (need_regenerate() ||
+      (!is.null(old_vol) && (old_vol != input$sys_volume || old_den != input$cell_density))) {
+    showModal(modalDialog(
+      title = "Regeneration Required",
+      "You have changed either system or model parameters.  The FBA models must be regenerated before simulation. Continue?",
+      footer = tagList(
+        modalButton("No"),
+        actionButton(ns("confirm_regen"), "Yes, regenerate", class = "btn-primary")
       ),
-      footer    = NULL,
-      easyClose = FALSE,
-      size      = "l"
-    )
-  )
+      easyClose = TRUE
+    ))
+  } else {
+    run_simulation(FALSE)
+  }
+})
 
-  tryCatch({
+observeEvent(input$confirm_regen, ignoreInit = TRUE, {
+  removeModal()
+  need_regenerate(FALSE)    # clear flag
+  run_simulation(TRUE)
+})
 
-    ## ── 1) Paths / YAML ─────────────────────────────────────────────────────
-    base       <- shinyFiles::parseDirPath(roots, input$hypernode_dir)
-    config_dir <- file.path(base, "config")
-    hypernode  <- basename(base)
-
-    yml_file <- list.files(config_dir, "\\.ya?ml$", full.names = TRUE)[1]
-    orig_yml <- if (length(yml_file)) yaml::read_yaml(yml_file) else list()
-    gui_yml  <- orig_yml
-
-    ## ── 2) Simulation section in YAML ───────────────────────────────────────
-    gui_yml$simulation <- list(
-      initial_time       = input$i_time,
-      final_time         = input$f_time,
-      step_size          = input$s_time,
-      absolute_tolerance = input$atol,
-      relative_tolerance = input$rtol
-    )
-
-    ## ── 3) Boundary metabolite concentrations ───────────────────────────────
-    bm_defs <- orig_yml$boundary_metabolites %||% character()
-    if (length(bm_defs)) {
-      met_ids <- gsub("[^A-Za-z0-9_]", "_", bm_defs)
-      gui_yml$simulation$boundary_concentrations <-
-        setNames(
-          lapply(met_ids, function(id) input[[paste0("conc_", id)]]),
-          bm_defs
-        )
-    }
-
-    ## ── 4) System parameters ───────────────────────────────────────────────
-    gui_yml$simulation$system_parameters <- list(
-      fba_upper_bound = input$fba_ub,
-      fba_lower_bound = input$fba_lb,
-      background_met  = input$background_met,
-      volume          = input$sys_volume,
-      cell_density    = input$cell_density
-    )
-
-    ## ── 5) Aggiorna cellular_units (parametri + initial_biomass) ────────────
-    if (!is.null(orig_yml$cellular_units)) {
-      nd <- node_data()
-      for (i in seq_along(orig_yml$cellular_units)) {
-        unit <- orig_yml$cellular_units[[i]]
-        mdl  <- unit$model_name
-        if (mdl %in% names(nd)) {
-          info <- nd[[mdl]]
-          orig_yml$cellular_units[[i]]$biomass$max   <- info$params$bioMax
-          orig_yml$cellular_units[[i]]$biomass$mean  <- info$params$bioMean
-          orig_yml$cellular_units[[i]]$biomass$min   <- info$params$bioMin
-          orig_yml$cellular_units[[i]]$population$starv <- info$params$starv
-          orig_yml$cellular_units[[i]]$population$dup   <- info$params$dup
-          orig_yml$cellular_units[[i]]$population$death <- info$params$death
-          orig_yml$cellular_units[[i]]$mu_max           <- info$params$mu_max
-          orig_yml$cellular_units[[i]]$initial_count    <- info$population
-          orig_yml$cellular_units[[i]]$initial_biomass  <-
-            info$initial_biomass %||% info$params$bioMean
-        }
-      }
-      gui_yml$cellular_units <- orig_yml$cellular_units
-    }
-
-    ## ── 6) Scrivi lo snapshot GUI YAML ──────────────────────────────────────
-    gui_yaml_path <- file.path(config_dir, paste0(hypernode, "_gui.yaml"))
-    yaml::write_yaml(gui_yml, gui_yaml_path)
-
-    ## ── 7) Lancio model_analysis_GUI ───────────────────────────────────────
-    epimodFBAfunctions::model_analysis_GUI(
-      paths = c(gen    = file.path(base, "gen"),
-                config = config_dir,
-                src    = file.path(base, "src"),
-                output = file.path(base, "output")),
-      hypernode_name = hypernode,
-      debug_solver   = FALSE,
-      i_time         = input$i_time,
-      f_time         = input$f_time,
-      s_time         = input$s_time,
-      atol           = input$atol,
-      rtol           = input$rtol,
-      fba_fname      = list.files(file.path(base, "biounits"),
-                                  "\\.txt$", full.names = TRUE, recursive = TRUE),
-      user_files     = c(
-        file.path(config_dir, "population_parameters.csv"),
-        file.path(base, "gen",    paste0(hypernode, ".fbainfo")),
-        file.path(base, "output", "ub_bounds_projected_gui.csv"),
-        file.path(base, "output", "non_projected_bounds_gui.csv")
-      ),
-      volume = base
-    )
-
-    ## ── 8) Success → modal ─────────────────────────────────────────────────
-    removeModal()
-    showModal(
-      modalDialog(
-        title = "✅ Simulation & Analysis Complete",
-        tagList(
-          div(style = "text-align:center;",
-              img(src = "success.png", height = "400px", alt = "Success")),
-          br(),
-          div("Your model has been generated and analyzed successfully.",
-              style = "text-align:center; font-weight:bold;"),
-          br(),
-          div("What would you like to do next?",
-              style = "text-align:center;")
-        ),
-        footer = tagList(
-          actionButton(ns("btn_visualize"), "Visualize Results",
-                       class = "btn-primary"),
-          actionButton(ns("btn_new_sim"),   "New Simulation",
-                       class = "btn-secondary")
-        ),
-        easyClose = FALSE,
-        size      = "l"
-      )
-    )
-
-    session$userData$last_hypernode <- base
-
-  }, error = function(err) {
-
-    ## ── ERROR ──────────────────────────────────────────────────────────────
-    removeModal()
-    showModal(
-      modalDialog(
-        title = "❌ Simulation Error",
-        tagList(
-          div(style = "text-align:center;",
-              img(src = "error.png", height = "400px", alt = "Error")),
-          br(),
-          div(paste("An error occurred during simulation:", err$message),
-              style = "text-align:center; color:red; font-weight:bold;")
-        ),
-        easyClose = TRUE,
-        footer    = modalButton("Close"),
-        size      = "l"
-      )
-    )
-
-  }, finally = {
-
-    ## ── CLEAN-UP (_gui files & stubs) ──────────────────────────────────────
-    try({
-      ## 1) csv temporanei
-      unlink(c(session_files$proj,
-               session_files$nproj),
-             force = TRUE)
-
-      ## 2) gui-yaml
-      unlink(gui_yaml_path, force = TRUE)
-
-      ## 3) mu_max csv
-      unlink(file.path(config_dir, "mu_max_values_gui.csv"), force = TRUE)
-
-      ## 4) stubs R/C++
-      src_dir   <- file.path(base, "src")
-      r_stubs   <- list.files(src_dir, "*_gui\\.R$",  full.names = TRUE)
-      cpp_stubs <- list.files(src_dir, "*_gui\\.cpp$", full.names = TRUE)
-      if (length(r_stubs))   unlink(r_stubs,   force = TRUE)
-      if (length(cpp_stubs)) unlink(cpp_stubs, force = TRUE)
-    }, silent = TRUE)
-
-  }) ## /tryCatch
-
-}) ## /observeEvent btn_run_sim
 
 
  		  # ── modals for each bacteria ─────────────────────────────────────────
-		# ── modals for each bacteria ────────────────────────────────────────
 		observe({
 			req(dir_valid())
 
@@ -800,10 +1232,6 @@ observeEvent(input$btn_run_sim, {
 				local({
 
 				  mdl2 <- mdl
-
-				  # ——————————————————————————————————————————————
-				  #  Clic sul nome del modello  →  apre il modal
-				  # ——————————————————————————————————————————————
 				  observeEvent(input[[paste0("model_", mdl2)]], ignoreInit = TRUE, {
 
 				    ## snapshot dati correnti -------------------------------------------------
@@ -898,12 +1326,9 @@ observeEvent(input$btn_run_sim, {
 				    ) # /showModal
 
 				    ## ───────── DT: parameters  ─────────
-						# ─────────────────────────────────────────────────────────────
-						#  A) RENDER DELLA TAB DEL PARAMETRI  (bloc-co SOSTITUTIVO)
-						# ─────────────────────────────────────────────────────────────
 						output[[param_id]] <- DT::renderDataTable({
 
-							## helper: se il valore non è scalare, prendi il primo elemento
+							## helper: se il valore non è scalare, prende il primo elemento
 							scalar_num <- function(x) {
 								out <- suppressWarnings(as.numeric(x[1]))
 								if (length(out) == 0 || is.na(out)) NA_real_ else out
@@ -931,51 +1356,60 @@ observeEvent(input$btn_run_sim, {
 
 
 				    ## edit parameters
-				    observeEvent(input[[paste0(param_id, "_cell_edit")]], ignoreInit = TRUE, {
-				      edit    <- input[[paste0(param_id, "_cell_edit")]]
-				      row     <- edit$row
-				      new_val <- suppressWarnings(as.numeric(edit$value))
-				      if (is.na(new_val)) {
-				        showNotification("Value must be numeric", type = "error")
-				        return()
-				      }
-				      isolate({
-				        nd    <- node_data()
-				        info1 <- nd[[mdl2]]
-				        fields <- c(names(info1$params), "initial_count")
-				        name   <- fields[row]
-				        if (name %in% names(info1$params)) {
-				          info1$params[[name]] <- new_val
-				        } else {
-				          info1$population <- new_val
-				        }
-				        nd[[mdl2]] <- info1
-				        node_data(nd)
-				      })
-				      upd <- node_data()[[mdl2]]
-				      df2 <- data.frame(
-				        Parameter = c(names(upd$params), "initial_count"),
-				        Value     = c(unlist(upd$params, use.names = FALSE),
-				                      upd$population),
-				        check.names = FALSE, stringsAsFactors = FALSE
-				      )
-							## ricostruisci il data-frame in modo sicuro
+						## ── Edit Parameters & Trigger FBA Regeneration ──────────────────────────────
+						observeEvent(input[[paste0(param_id, "_cell_edit")]], ignoreInit = TRUE, {
+							edit    <- input[[paste0(param_id, "_cell_edit")]]
+							row     <- edit$row
+							new_val <- suppressWarnings(as.numeric(edit$value))
+							if (is.na(new_val)) {
+								showNotification("Value must be numeric", type = "error")
+								return()
+							}
+
+							isolate({
+								# 1) Update in-memory cache
+								nd    <- node_data()
+								info1 <- nd[[mdl2]]
+								fields <- names(info1$params)
+								name   <- fields[row]
+								info1$params[[name]] <- new_val
+								nd[[mdl2]] <- info1
+								node_data(nd)
+							})
+
+							# 2) Overwrite lines 5–7 in the corresponding *_model.txt under biounits/<model>/
+							base      <- get_cfg_root()
+							biounit_d <- file.path(base, "biounits", mdl2)
+							txt_file  <- list.files(biounit_d, "_model\\.txt$", full.names = TRUE)[1]
+							if (length(txt_file) == 1 && file.exists(txt_file)) {
+								lines <- readLines(txt_file)
+								# assume lines[5]=bioMax, [6]=bioMean, [7]=bioMin
+								lines[5] <- as.character(info1$params$bioMax)
+								lines[6] <- as.character(info1$params$bioMean)
+								lines[7] <- as.character(info1$params$bioMin)
+								writeLines(lines, txt_file)
+								message("[DEBUG] Patched ", basename(txt_file), " (bioMax/bioMean/bioMin)")
+							}
+
+							# 3) Flag that FBA regeneration is required
+							need_regenerate(TRUE)
+						#	showNotification("Model parameters changed → FBA model regeneration required", type = "warning")
+
+							# 4) Update the DataTable in the modal
 							scalar_num <- function(x) {
 								out <- suppressWarnings(as.numeric(x[1]))
-								if (length(out) == 0 || is.na(out)) NA_real_ else out
+								if (length(out)==0 || is.na(out)) NA_real_ else out
 							}
+							upd <- node_data()[[mdl2]]
 							vals2 <- vapply(upd$params, scalar_num, numeric(1))
-
 							df2 <- data.frame(
-								Parameter   = c(names(upd$params), "initial_count"),
-								Value       = c(vals2, upd$population),
+								Parameter = c(names(upd$params), "initial_count"),
+								Value     = c(vals2, upd$population),
 								check.names = FALSE,
 								stringsAsFactors = FALSE
 							)
-
 							DT::replaceData(param_proxy, df2, resetPaging = FALSE, rownames = FALSE)
-
-				    })
+						})
 
 						## ───────── DT: bounds  ─────────
 						opts <- list(dom = "ft",
@@ -1048,23 +1482,47 @@ observeEvent(input$btn_run_sim, {
 						proj_proxy  <- DT::dataTableProxy(proj_id,  session)
 						nonpr_proxy <- DT::dataTableProxy(nonpr_id, session)
 
-
 						## ---- projected ----
 						observeEvent(input[[paste0(proj_id, "_cell_edit")]], ignoreInit = TRUE, {
 							ed  <- input[[paste0(proj_id, "_cell_edit")]]
-							row <- ed$row; col <- ed$col + 1   # col 2 = background_conc
+							row <- ed$row
+							col <- ed$col + 1        # data-frame column (1-based)
+
 							isolate({
 								nd   <- node_data()
 								info <- nd[[mdl2]]
-								info$projected[row, col] <- as.numeric(ed$value)
+								info$projected[row, col] <- as.numeric(ed$value)   # 1) update local model
 								nd[[mdl2]] <- info
-								node_data(nd)
+								node_data(nd)                                     # push to reactives
+
+								# ── se abbiamo toccato background_conc ────────────────────────────────
+								if (names(info$projected)[col] == "background_conc") {
+									reac <- info$projected$reaction[row]
+									newv <- as.numeric(ed$value)
+									message("[DT-EDIT] ", reac, " ← ", newv, " (model ", mdl2, ")")
+
+									# 2) propaga a *tutti* i modelli + CSV
+									propagate_to_all_models(reac, newv)
+
+									# 3) aggiorna il numericInput corrispondente al metabolita
+									met     <- sub("^EX_", "", sub("_r$", "", reac))
+									met_id  <- gsub("[^A-Za-z0-9_]", "_", met)
+									inp_id  <- paste0("conc_", met_id)
+									cur_val <- isolate(input[[inp_id]])
+									if (!isTRUE(all.equal(cur_val, newv))) {
+										message("[SYNC] update ", inp_id, " ← ", newv)
+										updateNumericInput(session, inp_id, value = newv)
+									}
+								}
 							})
+
+							# 4) refresh DT e salva CSV
 							DT::replaceData(proj_proxy,
 												      node_data()[[mdl2]]$projected,
 												      resetPaging = FALSE, rownames = FALSE)
 							rebuild_bounds_csv_single(session_files$proj, "projected")
 						})
+
 
 						## ---- non-projected ----
 						observeEvent(input[[paste0(nonpr_id, "_cell_edit")]], ignoreInit = TRUE, {
@@ -1122,7 +1580,7 @@ observeEvent(input$btn_run_sim, {
 		})
 
 		## ─────────────────────────────────────────────────────────────────────────────
-		## 2)  Quando confermano → salva la configurazione corrente
+		## 2) Quando confermano → salva la configurazione corrente in param_configs/
 		## ─────────────────────────────────────────────────────────────────────────────
 		observeEvent(input$confirm_save_config, {
 			req(input$config_name)
@@ -1131,28 +1589,32 @@ observeEvent(input$btn_run_sim, {
 				showNotification("Please enter a name.", type = "error")
 				return()
 			}
-			## sanitise per filesystem
-			cfg_name <- gsub("[^A-Za-z0-9_ -]", "_", cfg_name)
+			## 1) Sanitise per filesystem
+			cfg_name <- gsub("[^A-Za-z0-9_\\-]", "_", cfg_name)
 
-			## cartelle di destinazione --------------------------------------------------
-			base_dir      <- shinyFiles::parseDirPath(roots, input$hypernode_dir)
-			settings_root <- file.path(base_dir, "settings")
-			if (!dir.exists(settings_root)) dir.create(settings_root)
-			save_dir <- file.path(settings_root, cfg_name)
-			if (dir.exists(save_dir)) {
-				showNotification("A configuration with that name already exists.",
-				                 type = "error")
-				return()
-			}
+			## 2) Individua la root dell’hypernode (parent di cfg_01, conf_002_new, ecc.)
+			cfg_dir      <- get_cfg_root()             # es: /.../minimal_doublet/cfg_01
+			hypernode_dir<- dirname(cfg_dir)           # es: /.../minimal_doublet
+
+			## 3) Crea param_configs/ accanto a cfg_01
+			param_root <- file.path(hypernode_dir, "param_configs")
+			if (!dir.exists(param_root)) dir.create(param_root, recursive = TRUE)
+
+			## 4) Crea la sottocartella per questa parametrizzazione
+			save_dir <- file.path(param_root, cfg_name)
+		#	if (dir.exists(save_dir)) {
+		#		showNotification("A configuration with that name already exists.", type = "error")
+		#		return()
+		#	}
 			dir.create(save_dir)
 
-			## copia i 2 file GUI-temp ---------------------------------------------------
-			file.copy(session_files$proj, file.path(save_dir,
-				                                      basename(session_files$proj)))
-			file.copy(session_files$nproj, file.path(save_dir,
-				                                       basename(session_files$nproj)))
+			## 5) Copia i 2 file GUI‐temp
+			file.copy(session_files$proj,
+				        file.path(save_dir, basename(session_files$proj)))
+			file.copy(session_files$nproj,
+				        file.path(save_dir, basename(session_files$nproj)))
 
-			## 1) snapshot tempi & tolleranze -------------------------------------------
+			## 6) Costruisci l’oggetto R con parametri e boundary
 			cfg <- list(
 				times = list(
 				  initial_time = input$i_time,
@@ -1164,11 +1626,10 @@ observeEvent(input$btn_run_sim, {
 				  rtol = input$rtol
 				)
 			)
-
-			## 2) snapshot concentrazioni boundary --------------------------------------
-			yml_f <- list.files(file.path(base_dir, "config"),
-				                  "\\.ya?ml$", full.names = TRUE)[1]
-			yml   <- if (length(yml_f)) yaml::read_yaml(yml_f) else list()
+			# Boundary concentrations
+			yml_f   <- list.files(file.path(cfg_dir, "config"),
+				                    "\\.ya?ml$", full.names = TRUE)[1]
+			yml     <- if (length(yml_f)) yaml::read_yaml(yml_f) else list()
 			bm_defs <- yml$boundary_metabolites %||% character()
 			if (length(bm_defs)) {
 				met_ids <- gsub("[^A-Za-z0-9_]", "_", bm_defs)
@@ -1177,17 +1638,16 @@ observeEvent(input$btn_run_sim, {
 				  bm_defs
 				)
 			}
-
-			## 3) system parameters ------------------------------------------------------
+			# System parameters
 			cfg$system_parameters <- list(
-				fba_upper_bound = input$fba_ub,
-				fba_lower_bound = input$fba_lb,
+				projected_upper_bound = input$fba_ub,
+				projected_lower_bound = input$fba_lb,
 				background_met  = input$background_met,
+				background_met_lb  = input$background_met_lb,
 				volume          = input$sys_volume,
 				cell_density    = input$cell_density
 			)
-
-			## 4) parametri per-modello (+ initial_biomass) -----------------------------
+			# Per‐model parameters
 			nd <- node_data()
 			cfg$models <- lapply(names(nd), function(mdl) {
 				info <- nd[[mdl]]
@@ -1199,7 +1659,7 @@ observeEvent(input$btn_run_sim, {
 				)
 			})
 
-			## 5) salva JSON + YAML ------------------------------------------------------
+			## 7) Scrivi JSON + YAML dentro save_dir
 			jsonlite::write_json(cfg,
 				                   file.path(save_dir, "config_values.json"),
 				                   auto_unbox = TRUE, pretty = TRUE)
@@ -1207,153 +1667,144 @@ observeEvent(input$btn_run_sim, {
 				               file.path(save_dir, paste0("config_", cfg_name, ".yaml")))
 
 			removeModal()
-			showNotification(paste("Configuration saved as", cfg_name), type = "message")
+			showNotification(paste("Configuration saved as", cfg_name),
+				               type = "message")
 		})
 
-
 		## ─────────────────────────────────────────────────────────────────────────────
-		## 1)  Click “Load Configuration…” → elenco configurazioni disponibili
+		## 1) Click “Load Configuration…” → elenco configurazioni in param_configs/
 		## ─────────────────────────────────────────────────────────────────────────────
 		observeEvent(input$load_configuration, {
 			req(dir_valid())
-			base_dir      <- shinyFiles::parseDirPath(roots, input$hypernode_dir)
-			settings_root <- file.path(base_dir, "settings")
-			configs <- if (dir.exists(settings_root))
-				           basename(list.dirs(settings_root, full.names = TRUE,
-				                              recursive = FALSE))
-				         else character()
-			if (!length(configs)) {
-				showNotification("No saved configurations found.", type = "warning")
+			# 1) root della config corrente e hypernode
+			cfg_dir       <- get_cfg_root()        # es: .../minimal_doublet/cfg_01
+			hypernode_dir <- dirname(cfg_dir)      # es: .../minimal_doublet
+
+			# 2) cartella param_configs/
+			param_root <- file.path(hypernode_dir, "param_configs")
+			if (!dir.exists(param_root)) {
+				showNotification("Nessuna parametrizzazione salvata trovata.", type = "warning")
 				return()
 			}
+
+			# 3) elenco delle sottocartelle (una per ciascuna parametrizzazione)
+			configs <- basename(list.dirs(param_root, full.names = TRUE, recursive = FALSE))
+			if (length(configs) == 0) {
+				showNotification("Nessuna parametrizzazione salvata trovata.", type = "warning")
+				return()
+			}
+
 			showModal(modalDialog(
-				title = "Load Saved Configuration",
-				selectInput(ns("choose_config"), "Select configuration:", choices = configs),
-				footer = tagList(
+				title   = "Load Saved Parametrization",
+				selectInput(ns("choose_config"), "Select parametrization:", choices = configs),
+				footer  = tagList(
 				  modalButton("Cancel"),
-				  actionButton(ns("confirm_load_config"), "Load Configuration",
-				               class = "btn-primary")
+				  actionButton(ns("confirm_load_config"), "Load", class = "btn-primary")
 				),
 				easyClose = FALSE
 			))
 		})
 
+		## ─────────────────────────────────────────────────────────────────────────────
+		## 2) Conferma caricamento → applica la parametrizzazione
+		## ─────────────────────────────────────────────────────────────────────────────
+		observeEvent(input$confirm_load_config, {
+			req(input$choose_config)
+			cfg_name      <- input$choose_config
+			cfg_dir       <- get_cfg_root()
+			hypernode_dir <- dirname(cfg_dir)
+			param_root    <- file.path(hypernode_dir, "param_configs")
+			load_dir      <- file.path(param_root, cfg_name)
 
-	## ─────────────────────────────────────────────────────────────────────────────
-## 2)  Conferma caricamento  →  applica configurazione
-## ─────────────────────────────────────────────────────────────────────────────
-observeEvent(input$confirm_load_config, {
-  req(input$choose_config)
-  cfg_name <- input$choose_config
+			# 1) Copia i 2 CSV GUI‐temp nella sessione
+			for (slot in c("proj", "nproj")) {
+				dest <- session_files[[slot]]
+				src  <- file.path(load_dir, basename(dest))
+				if (file.exists(src)) {
+				  file.copy(src, dest, overwrite = TRUE)
+				}
+			}
 
-  base_dir <- shinyFiles::parseDirPath(roots, input$hypernode_dir)
-  load_dir <- file.path(base_dir, "settings", cfg_name)
+			# 2) Rilettura dei CSV appena copiati
+			proj_df  <- if (file.exists(session_files$proj))
+				            read.csv(session_files$proj,  stringsAsFactors = FALSE) else data.frame()
+			nproj_df <- if (file.exists(session_files$nproj))
+				            read.csv(session_files$nproj, stringsAsFactors = FALSE) else data.frame()
 
-  ## ── 1) Copia i 2 CSV GUI-temp nella sessione corrente ---------------------
-  for (slot in c("proj", "nproj")) {
-    dest <- session_files[[slot]]
-    src  <- file.path(load_dir, basename(dest))
-    file.copy(src, dest, overwrite = TRUE)
-  }
+			# helper “colonna singola”
+			make_bounds_single <- function(df, mdl) {
+				sub <- df[df$FBAmodel == mdl, , drop = FALSE]
+				if (!nrow(sub) || !"background_conc" %in% names(sub))
+				  return(data.frame(reaction=character(), background_conc=numeric()))
+				agg <- tapply(sub$background_conc, sub$reaction, sum)
+				data.frame(reaction=names(agg), background_conc=as.numeric(agg), stringsAsFactors=FALSE)
+			}
 
-  ## ── 2) Rilettura dei CSV appena copiati -----------------------------------
-  proj_df  <- if (file.exists(session_files$proj))
-                read.csv(session_files$proj,  stringsAsFactors = FALSE)
-              else data.frame()
+			# 3) Ricostruisci node_data() con i nuovi bounds
+			info_list <- lapply(models(), function(mdl) {
+				list(
+				  params          = node_data()[[mdl]]$params,
+				  population      = node_data()[[mdl]]$population,
+				  initial_biomass = node_data()[[mdl]]$initial_biomass,
+				  projected       = make_bounds_single(proj_df, mdl),
+				  nonprojected    = make_bounds_single(nproj_df, mdl)
+				)
+			})
+			names(info_list) <- models()
+			node_data(info_list)
 
-  nproj_df <- if (file.exists(session_files$nproj))
-                read.csv(session_files$nproj, stringsAsFactors = FALSE)
-              else data.frame()
+			# 4) Ripristina gli input dal JSON salvato
+			json_path <- file.path(load_dir, "config_values.json")
+			if (file.exists(json_path)) {
+				vals <- jsonlite::fromJSON(json_path, simplifyVector = FALSE)
 
-  ## ── 3) Helper “colonna singola” (solo background_conc) --------------------
-  make_bounds_single <- function(df, mdl) {
-    sub <- df[df$FBAmodel == mdl, , drop = FALSE]
-    if (!nrow(sub) || !"background_conc" %in% names(sub))
-      return(data.frame(reaction        = character(),
-                        background_conc = numeric(),
-                        stringsAsFactors = FALSE))
+				# tempi & tolleranze
+				updateNumericInput(session, "i_time", value = vals$times$initial_time)
+				updateNumericInput(session, "f_time", value = vals$times$final_time)
+				updateNumericInput(session, "s_time", value = vals$times$step_size)
+				updateNumericInput(session, "atol",   value = vals$tolerances$atol)
+				updateNumericInput(session, "rtol",   value = vals$tolerances$rtol)
 
-    agg <- tapply(sub$background_conc, sub$reaction, sum)
+				# boundary concentrations
+				yml_f   <- list.files(file.path(cfg_dir, "config"), "\\.ya?ml$", full.names = TRUE)[1]
+				yml     <- if (length(yml_f)) yaml::read_yaml(yml_f) else list()
+				bm_defs <- yml$boundary_metabolites %||% character()
+				met_ids <- gsub("[^A-Za-z0-9_]", "_", bm_defs)
+				for (i in seq_along(bm_defs)) {
+				  updateNumericInput(
+				    session,
+				    paste0("conc_", met_ids[i]),
+				    value = vals$boundary_concentrations[[ bm_defs[i] ]]
+				  )
+				}
 
-    data.frame(
-      reaction        = names(agg),
-      background_conc = as.numeric(agg),
-      stringsAsFactors = FALSE
-    )
-  }
+				# system parameters (nascosti)
+				sp <- vals$system_parameters
+				updateNumericInput(session, "fba_ub",       value = sp$projected_upper_bound)
+				updateNumericInput(session, "fba_lb",       value = sp$projected_lower_bound)
+				updateNumericInput(session, "background_met", value = sp$background_met)
+				updateNumericInput(session, "background_met_lb", value = sp$background_met_lb)
+				updateNumericInput(session, "sys_volume",   value = sp$volume)
+				updateNumericInput(session, "cell_density", value = sp$cell_density)
 
-  ## ── 4) Ricostruisci node_data() con i nuovi bounds ------------------------
-  models_list <- models()
+				# parametri per modello
+				if (!is.null(vals$models)) {
+				  nd <- node_data()
+				  for (m in vals$models) {
+				    mdl <- m$model_name
+				    if (mdl %in% names(nd)) {
+				      nd[[mdl]]$params          <- m$parameters
+				      nd[[mdl]]$population      <- m$population
+				      nd[[mdl]]$initial_biomass <- m$initial_biomass
+				    }
+				  }
+				  node_data(nd)
+				}
+			}
 
-  info_list <- lapply(models_list, function(mdl) {
-    list(
-      ## cache invariata
-      params          = node_data()[[mdl]]$params,
-      population      = node_data()[[mdl]]$population,
-      initial_biomass = node_data()[[mdl]]$initial_biomass,
-
-      ## nuovi bounds (una sola colonna)
-      projected       = make_bounds_single(proj_df , mdl),
-      nonprojected    = make_bounds_single(nproj_df, mdl)
-    )
-  })
-  names(info_list) <- models_list
-  node_data(info_list)
-
-  ## ── 5) Ripristina gli input dall’eventuale JSON ---------------------------
-  json_path <- file.path(load_dir, "config_values.json")
-  if (file.exists(json_path)) {
-
-    vals <- jsonlite::fromJSON(json_path, simplifyVector = FALSE)
-
-    ## tempi / tolleranze
-    updateNumericInput(session, "i_time", value = vals$times$initial_time)
-    updateNumericInput(session, "f_time", value = vals$times$final_time)
-    updateNumericInput(session, "s_time", value = vals$times$step_size)
-    updateNumericInput(session, "atol",   value = vals$tolerances$atol)
-    updateNumericInput(session, "rtol",   value = vals$tolerances$rtol)
-
-    ## boundary metabolite concentrations
-    yml_f   <- list.files(file.path(base_dir, "config"),
-                          "\\.ya?ml$", full.names = TRUE)[1]
-    yml     <- if (length(yml_f)) yaml::read_yaml(yml_f) else list()
-    bm_defs <- yml$boundary_metabolites %||% character()
-    met_ids <- gsub("[^A-Za-z0-9_]", "_", bm_defs)
-    for (i in seq_along(bm_defs)) {
-      updateNumericInput(session,
-                         paste0("conc_", met_ids[i]),
-                         value = vals$boundary_concentrations[[ bm_defs[i] ]])
-    }
-
-    ## system parameters (restano se presenti negli input nascosti)
-    sp <- vals$system_parameters
-    updateNumericInput(session, "fba_ub",         value = sp$fba_upper_bound)
-    updateNumericInput(session, "fba_lb",         value = sp$fba_lower_bound)
-    updateNumericInput(session, "background_met", value = sp$background_met)
-    updateNumericInput(session, "sys_volume",     value = sp$volume)
-    updateNumericInput(session, "cell_density",   value = sp$cell_density)
-
-    ## parametri per-modello
-    if (!is.null(vals$models)) {
-      nd <- node_data()
-      for (m in vals$models) {
-        mdl <- m$model_name
-        if (mdl %in% names(nd)) {
-          nd[[mdl]]$params          <- m$parameters
-          nd[[mdl]]$population      <- m$population
-          nd[[mdl]]$initial_biomass <- m$initial_biomass
-        }
-      }
-      node_data(nd)
-    }
-  }
-
-  removeModal()
-  showNotification(paste("Loaded configuration:", cfg_name), type = "message")
-})
-
-
-
+			removeModal()
+			showNotification(paste("Parametrization loaded:", cfg_name), type = "message")
+		})
 
 		# ── 5) Handle modal choices ────────────────────────────────────────────────
 		# Visualize Results

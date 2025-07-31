@@ -106,7 +106,17 @@ dataVisServer <- function(id) {
     observeEvent(input$btn_plot, {
       # get path
       base <- hypernode_path()
-      analysis_dir <- file.path(base, paste0(basename(base), "_analysis"))
+			cfg_name     <- basename(base)
+			hn_name      <- basename(dirname(base))
+			hypernode_id <- paste(hn_name, cfg_name, sep = "_")
+
+			# 3) punta alla cartella di analysis DENTRO il nested base
+			analysis_dir <- file.path(
+				base,
+				paste0(hypernode_id, "_analysis")
+			)
+			message("[DEBUG] hypernode_id = ", hypernode_id)
+			message("[DEBUG] analysis_dir = ", analysis_dir)
       if (!dir.exists(analysis_dir)) {
         showModal(modalDialog(
           title = "Error",

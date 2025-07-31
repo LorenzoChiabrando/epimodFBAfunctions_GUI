@@ -80,6 +80,7 @@ modelGenServer <- function(id) {
 
 		selected_bmet <- reactiveVal(character())   # holds chosen metabolite IDs
 
+		conf_name <- reactiveVal(NULL)
 
 		empty_cfg <- function(fp) {
 			base  <- tools::file_path_sans_ext(basename(fp))
@@ -173,7 +174,45 @@ modelGenServer <- function(id) {
 				      jsonlite::toJSON(effective_cfgs(), pretty = TRUE, auto_unbox = TRUE))
 		})
 
-    
+ ## ------------------------------------------------------------------
+## Scrive i valori di biomass max / mean / min alle righe 5-6-7
+## di ogni <label>_model.txt presente in biounits/
+## ------------------------------------------------------------------
+update_biounit_biomass <- function(biounits_dir, cfgs) {
+
+  lapply(cfgs, function(cg) {
+
+    ##  1) localizza il file dal label (es. "acd1_model.txt")
+    lab   <- cg$label
+    fpath <- list.files(
+      biounits_dir,
+      pattern   = paste0("^", lab, "_model\\.txt$"),
+      recursive = TRUE, full.names = TRUE
+    )
+
+    if (length(fpath) != 1) {
+      warning("⚠️  file .txt non trovato o duplicato per label: ", lab)
+      return(invisible())
+    }
+
+    ##  2) rimpiazza le righe 5-6-7
+    ln <- readLines(fpath, warn = FALSE)
+    if (length(ln) < 7) {
+      warning("⚠️  ", basename(fpath), " ha meno di 7 righe, salto.")
+      return(invisible())
+    }
+    ln[5] <- as.character(cg$biomass$max  %||% "")
+    ln[6] <- as.character(cg$biomass$mean %||% "")
+    ln[7] <- as.character(cg$biomass$min  %||% "")
+
+    writeLines(ln, fpath)
+    message("✓ Aggiornato ", basename(fpath),
+            "  →  (", cg$biomass$max, ", ",
+                       cg$biomass$mean, ", ",
+                       cg$biomass$min, ")")
+  })
+}
+   
 
 		#──────────────────────────────────────────────────────────────────────────────
 		#  TOP CARD  (directory picker + hypernode name)  —  UI REATTIVA
@@ -214,83 +253,81 @@ modelGenServer <- function(id) {
 				      class = "btn-reset-sim")
 				  )
 				)
-
 			#──────────────   STATO ➋  (inizializzazione)   ──────────────
 			} else {
 
 				div(class = "sim-section-card directory",
-				  h4(icon("folder-open"), "Initialize Hypernode", class = "sim-section-title"),
+					h4(icon("folder-open"), "Initialize Hypernode", class = "sim-section-title"),
 
-				  ## Campo nome hypernode – isolate() evita il refresh a ogni tasto
-				  div(class = "mb-4",
-				    textInput(
-				      ns("hypernode_name"),
-				      "Hypernode Name",
-				      value       = isolate(hypernode_name()),
-				      placeholder = "Enter unique name for this run",
-				      width       = "40%"
-				    )
-				  ),
+					## ——— Hypernode name ---------------------------------------------------
+					div(class = "mb-3",
+						textInput(
+						  ns("hypernode_name"),
+						  "Hypernode Name",
+						  value       = isolate(hypernode_name()),
+						  placeholder = "Enter hypernode name",
+						  width       = "40%"
+						)
+					),
 
-				  ## RIGA bottoni / badge
-				  div(class = "d-flex flex-wrap align-items-end gap-4 mt-4",
+					## ①  Working / MAT picker & reset
+					div(class = "d-flex flex-wrap align-items-end gap-4 mt-3",
 
-				    # Working dir
-				    if (wd_ok)
-				      div(class = "selected-dir flex-grow-1",
-				        strong("Working:", class = "me-2 text-secondary"),
-				        span(basename(working_dir()), class = "badge bg-primary fs-6")
-				      )
-				    else
-				      shinyFiles::shinyDirButton(
-				        id    = ns("work_dir"),
-				        label = "Working dir…",
-				        title = "Choose working directory",
-				        icon  = icon("folder-open"),
-				        class = "btn btn-primary shinyDirButton flex-grow-1"
-				      ),
-				      
+						# Working dir
+						if (wd_ok)
+						  div(class = "selected-dir flex-grow-1",
+						    strong("Working:", class = "me-2 text-secondary"),
+						    span(basename(working_dir()), class = "badge bg-primary fs-6")
+						  )
+						else
+						  shinyFiles::shinyDirButton(
+						    id    = ns("work_dir"),
+						    label = "Working dir…",
+						    title = "Choose working directory",
+						    icon  = icon("folder-open"),
+						    class = "btn btn-primary shinyDirButton flex-grow-1"
+						  ),
 
-				    # MAT dir
-				    if (md_ok)
-				      div(class = "selected-dir flex-grow-1",
-				        strong("MAT:", class = "me-2 text-secondary"),
-				        span(basename(matfile_dir()), class = "badge bg-primary fs-6")
-				      )
-				    else
-				      shinyFiles::shinyDirButton(
-				        id    = ns("mat_dir"),
-				        label = "MAT dir…",
-				        title = "Choose MAT-file directory",
-				        icon  = icon("folder-open"),
-				        class = "btn btn-primary shinyDirButton flex-grow-1"
-				      ),
+						# MAT dir
+						if (md_ok)
+						  div(class = "selected-dir flex-grow-1",
+						    strong("MAT:", class = "me-2 text-secondary"),
+						    span(basename(matfile_dir()), class = "badge bg-primary fs-6")
+						  )
+						else
+						  shinyFiles::shinyDirButton(
+						    id    = ns("mat_dir"),
+						    label = "MAT dir…",
+						    title = "Choose MAT-file directory",
+						    icon  = icon("folder-open"),
+						    class = "btn btn-primary shinyDirButton flex-grow-1"
+						  ),
 
-				      hr(),
-				    # Bottone reset
-				    if (wd_ok || md_ok)
-				      div(class = "mt-3 text-right",
-				        actionButton(
-				          ns("btn_reset_dirs"),
-				          NULL,
-				          icon  = icon("redo"),
-				          class = "btn-reset-sim align-self-center"
-				        )
-				      ),
+						# Reset ↺
+						if (wd_ok || md_ok)
+						  div(class = "mt-3 text-right",
+						    actionButton(
+						      ns("btn_reset_dirs"),
+						      NULL,
+						      icon  = icon("redo"),
+						      class = "btn-reset-sim align-self-center"
+						    )
+						  ),
 
-				    # «Load models» (solo se entrambe le cartelle sono valide)
-				    if (wd_ok && md_ok)
-				      div(class = "mt-3",
-				        actionButton(
-				          ns("btn_step1"), "Load Models",
-				          icon  = icon("play"),
-				          class = "btn btn-success px-4 align-self-center"
-				        )
-				      )
-				  )
+						# ②  Load-Models  (abilitato se nome + cartelle ok)
+						if (wd_ok && md_ok)
+						  div(class = "mt-3",
+						    actionButton(
+						      ns("btn_step1"), "Load Models",
+						      icon  = icon("play"),
+						      class = "btn btn-success px-4 align-self-center"
+						    )
+						  )
+					)
 				)
 			}
 		})
+		
 
 		# ── 3a) validate Working directory ----------------------------------------
 		observeEvent(input$work_dir, ignoreInit = TRUE, {
@@ -352,148 +389,88 @@ modelGenServer <- function(id) {
 		})
 
 
-    # ---- 6) on clicking Load Models, run your old metadata logic ----
+		# ------------------------------------------------------------------
+		# CLICK «Load Models»  – usa il nome già inserito nel textInput
+		# ------------------------------------------------------------------
 		observeEvent(input$btn_step1, {
-		
-			# ── NEW: ensure a hypernode name is provided ─────────────────────────────
 
-			# 2) Hypernode name missing
-			if (is.null(input$hypernode_name) ||
-					trimws(input$hypernode_name) == "") {
-				showModal(
-					modalDialog(
-						title = "Hypernode Name Required",
-						tagList(
-						  div(style="text-align:center;",
-						      img(src="error.png", height="400px", alt="Error")
-						  ),
-						  br(),
-						  div(
-						    "Please enter a hypernode name before loading models.",
-						    style="text-align:center; color:red; font-weight:bold;"
-						  )
-						),
-						easyClose = TRUE,
-						footer    = modalButton("OK"),
-						size      = "l"
-					)
-				)
-				return()   # abort handler
-			}
-				
-			# --- 0) Mostra modal “Running…” e blocca tutto
-			showModal(
-				modalDialog(
-					title    = NULL,
-					tagList(
-						# here’s the image, centered…
-						div(
-						  style = "text-align:center;",
-						  img(src = "running.png", height = "400px", alt = "Loading…")
-						),
-						br(),
-						div("Loading models, please wait…", style="text-align:center; font-weight:bold;")
-					),
-					footer   = NULL,
-					easyClose= FALSE,
-					size     = "l"
-				)
-			)
-
-			# 1) store step1 inputs
-			hypernode_name(input$hypernode_name)
-			wd  <- shinyFiles::parseDirPath(roots, input$work_dir)
-			matd <- shinyFiles::parseDirPath(roots, input$mat_dir)
-			shiny::req(length(wd)==1, nzchar(wd), dir.exists(wd))
-			shiny::req(length(matd)==1, nzchar(matd), dir.exists(matd))
-			working_dir(wd)
-			matfile_dir(matd)
-
-			# 2) ensure config/ exists under working_dir
-			cfg_dir <- file.path(working_dir(), "config")
-			if (!dir.exists(cfg_dir)) dir.create(cfg_dir, recursive = TRUE)
-
-			cfg_dir_path(cfg_dir)          # ← add this
-
-
-			# 3) generate metadata CSVs under sel/<model_name>/
-			epimodFBAfunctions::generate_metadata(
-				matfile_dir(), overwrite=TRUE,
-				progress=function(i, total) shiny::incProgress(1/total)
-			)
-			
-
-			# 4) find all .mat files in sel
-			paths <- list.files(matfile_dir(), "\\.mat$", full.names=TRUE)
-			if (length(paths)==0) {
-				shiny::showNotification("Nessun file .mat trovato", type="error")
+			## nome mancante → errore immediato
+			if (is.null(input$hypernode_name) || trimws(input$hypernode_name) == "") {
+				showNotification("Please enter a hypernode name first.", type = "error")
 				return()
 			}
+			hypernode_name(trimws(input$hypernode_name))
 
-			# 5) per ciascun modello copia cartella metadata → config/ e poi la rimuove
+			## spinner “Loading…”
+			showModal(modalDialog(
+				title = NULL,
+				div(style = "text-align:center;",
+				    img(src = "running.png", height = "400px", alt = "Loading…")),
+				br(),
+				div("Loading models, please wait…",
+				    style = "text-align:center; font-weight:bold;"),
+				footer = NULL, easyClose = FALSE, size = "l"
+			))
+
+			## path preliminari
+			wd   <- shinyFiles::parseDirPath(roots, input$work_dir)
+			matd <- shinyFiles::parseDirPath(roots, input$mat_dir)
+			shiny::req(dir.exists(wd), dir.exists(matd))
+			working_dir(wd);  matfile_dir(matd)
+
+			## cartella config/
+			cfg_dir <- file.path(working_dir(), "config")
+			if (!dir.exists(cfg_dir)) dir.create(cfg_dir, recursive = TRUE)
+			cfg_dir_path(cfg_dir)
+
+			## metadata dai .mat
+			epimodFBAfunctions::generate_metadata(
+				matfile_dir(), overwrite = TRUE,
+				progress = function(i, total) shiny::incProgress(1 / total)
+			)
+
+			## copia metadata → config/
+			paths <- list.files(matfile_dir(), "\\.mat$", full.names = TRUE)
+			if (length(paths) == 0) {
+				removeModal()
+				showNotification("Nessun file .mat trovato", type = "error")
+				return()
+			}
 			model_names <- tools::file_path_sans_ext(basename(paths))
 			for (mn in model_names) {
 				src  <- file.path(matfile_dir(), mn)
 				dest <- file.path(cfg_dir, mn)
-				message("[DBG] Contenuto di ", dest, ":")
- 				message(paste(list.files(dest), collapse = ", "))
 				if (!dir.exists(src)) next
-				if (!dir.exists(dest)) dir.create(dest, recursive=TRUE)
-
-				# copia tutto tranne .mat (che sta in matfile_dir, non nella sottocartella)
-				files_to_copy <- list.files(src, full.names=TRUE, all.files=TRUE)
-				file.copy(files_to_copy, dest, recursive=TRUE, overwrite=TRUE)
-
-				# elimina la cartella metadata originale
-				unlink(src, recursive=TRUE, force=TRUE)
+				if (!dir.exists(dest)) dir.create(dest, recursive = TRUE)
+				file.copy(list.files(src, full.names = TRUE, all.files = TRUE),
+				          dest, recursive = TRUE, overwrite = TRUE)
+				unlink(src, recursive = TRUE, force = TRUE)
 			}
 
-
-			# 6) read metadata from config/  ───────────────────────────────────────
-			## 6) read metadata from config/ ----------------------------------
+			## leggi i CSV
 			meta <- lapply(model_names, function(mn) {
 				md_dir <- file.path(cfg_dir, mn)
-
-				meta_path <- list.files(md_dir,
-						                    pattern = "^meta(bolite)?s?_?metadata\\.csv$",
-						                    ignore.case = TRUE, full.names = TRUE)[1]
-				rxn_path  <- list.files(md_dir,
-						                    pattern = "^react.*_metadata\\.csv$",
-						                    ignore.case = TRUE, full.names = TRUE)[1]
-				bnd_path  <- list.files(md_dir,
-						                    pattern = "^boundary.*\\.csv$",
-						                    ignore.case = TRUE, full.names = TRUE)[1]
-
+				meta_path <- list.files(md_dir, "^meta(bolite)?s?_?metadata\\.csv$",
+				                        ignore.case = TRUE, full.names = TRUE)[1]
+				rxn_path  <- list.files(md_dir, "^react.*_metadata\\.csv$",
+				                        ignore.case = TRUE, full.names = TRUE)[1]
+				bnd_path  <- list.files(md_dir, "^boundary.*\\.csv$",
+				                        ignore.case = TRUE, full.names = TRUE)[1]
 				if (all(file.exists(c(meta_path, rxn_path, bnd_path)))) {
-					list(
-						meta = readr::read_csv(meta_path, show_col_types = FALSE),
-						rxn  = readr::read_csv(rxn_path,  show_col_types = FALSE),
-						bnd  = readr::read_csv(bnd_path,  show_col_types = FALSE)
-					)
-				} else {
-					message("[WARN] Metadati mancanti per ", mn)
-					NULL
-				}
+				  list(
+				    meta = readr::read_csv(meta_path, show_col_types = FALSE),
+				    rxn  = readr::read_csv(rxn_path,  show_col_types = FALSE),
+				    bnd  = readr::read_csv(bnd_path,  show_col_types = FALSE)
+				  )
+				} else NULL
 			})
-
-			names(meta) <- model_names               # ← **crucial** map by bare model name
-
-			meta_cache(meta)                         # store for downstream use
-			observeEvent(meta_cache(), {
-				lapply(names(meta_cache()), function(mn) {
-					mc <- meta_cache()[[mn]]
-					if (is.null(mc)) return()
-					message(sprintf("[DBG] %s: meta=%d rxn=%d bnd=%d",
-						              mn, nrow(mc$meta), nrow(mc$rxn), nrow(mc$bnd)))
-  				})
-			})
-
-
+			names(meta) <- model_names
+			meta_cache(meta)
 			unit_cfgs(lapply(paths, empty_cfg))
-    	removeModal()
+
+			removeModal()
 			current(1)
 		})
-
 
 
 
@@ -1156,174 +1133,229 @@ observe({
 			))
 		})
 
-
-
-# ---- C‴) YAML gen: live-read per-model inputs with global fallbacks AND write to disk ----
-		# ---- C‴) YAML gen: live-read per-model inputs with global fallbacks AND write to disk ----
+		# 1) CLICK «Generate Model»  →  chiedi il nome della configurazione
 		observeEvent(input$btn_generate, {
-
-			# 0) Show blocking “spinner” modal
 			showModal(
 				modalDialog(
-				  title    = NULL,
-				  tagList(
-				    div(style = "text-align:center;",
-				        img(src = "running.png", height = "400px", alt = "Loading…")
-				    ),
-				    br(),
-				    div("Generating YAML and building hypernode…",
-				        style="text-align:center; font-weight:bold;")
+				  title = "Configuration Name",
+				  textInput(
+				    ns("modal_conf_name"),
+				    "Choose a name for this configuration",
+				    placeholder = "e.g., cfg_01"
 				  ),
-				  footer    = NULL,    # no buttons
-				  easyClose = FALSE,   # cannot close by ESC or click outside
-				  size      = "l"
+				  footer = tagList(
+				    modalButton("Cancel"),
+				    actionButton(ns("confirm_confname"), "Generate", class = "btn-primary")
+				  ),
+				  easyClose = FALSE
 				)
 			)
-			
-			## 1) assicura il reset in **qualunque** esito
-  		on.exit(reset_state(), add = TRUE)
+		})
 
-			# 1) Wrap everything in tryCatch to cleanly handle errors
+		# 2) CLICK «Generate» sul modal → esegui tutto il flusso con debug
+		observeEvent(input$confirm_confname, {
+			message("🔔 [0] Enter confirm_confname")
+
+			# 2.1 Leggi e salva il nome della configurazione
+			cname <- trimws(input$modal_conf_name)
+			message(sprintf("🔔 [1] modal_conf_name = '%s'", cname))
+			if (cname == "") {
+				showNotification("Please enter a valid name.", type = "error")
+				message("🔔 [1a] Invalid config name, aborting")
+				return()
+			}
+			conf_name(cname)
+			removeModal()
+			message("🔔 [2] conf_name set to: ", conf_name())
+
+			# 2.2 Mostra spinner
+			showModal(modalDialog(
+				title = NULL,
+				tagList(
+				  div(style="text-align:center;", img(src="running.png", height="400px")),
+				  br(),
+				  div("Generating YAML and building hypernode…",
+				      style="text-align:center; font-weight:bold;")
+				),
+				footer    = NULL, easyClose = FALSE, size = "l"
+			))
+
+			on.exit({
+				message("🔔 [X] on.exit → reset_state()")
+				reset_state()
+			}, add = TRUE)
+
 			tryCatch({
-
-				# • 1) gather inputs for YAML
+				# 3) Gather inputs + build YAML
+				message("🔔 [3] Gather inputs and build YAML")
 				bounds   <- selected_bmet()
-				eff_cfgs <- effective_cfgs()       # ← aplica subito i fallback
-
-				# • 2) build the YAML text
+				eff_cfgs <- effective_cfgs()
 				yaml_txt <- build_hypernode_yaml(eff_cfgs, global_cfg(), bounds)
 
-				# • 3) preview YAML in-app
-				#output$cfg_yaml <- renderText(paste(yaml_txt, collapse = "\n"))
+				# 4) Prepare names
+				hn         <- hypernode_name()             # "katlin"
+				cfg        <- conf_name()                  # "omega"
+				tmp_name   <- paste(hn, cfg, sep = "_")    # "katlin_omega"
+				nested_dir <- file.path(hn, cfg)           # "katlin/omega"
+				message(sprintf("   • hn='%s', cfg='%s', tmp_name='%s'", hn, cfg, tmp_name))
 
-				# • 4) write YAML & build hypernode directory
-				out_paths  <- write_hypernode_yaml(yaml_txt, working_dir(), hypernode_name())
-				config_dir <- dirname(out_paths$yaml)
-				bc_json    <- file.path(config_dir, "boundary_conditions.json")
+				# 5) Staging: YAML + initial_data in working_dir()/config
+				wd <- working_dir()
+				message("🔔 [4] write_hypernode_yaml to staging")
+				out_paths <- write_hypernode_yaml(
+				  yaml_txt  = yaml_txt,
+				  out_dir   = wd,
+				  hypernode = tmp_name
+				)
+				config_dir <- fs::path_expand(dirname(out_paths$yaml))
+				fs::dir_create(config_dir, recurse = TRUE)
+				message("   • staging config_dir =", config_dir)
 
-				vol   <- global_cfg()$volume
-				dens  <- global_cfg()$cell_density
-				plb   <- global_cfg()$projected_lower_bound
-				pub   <- global_cfg()$projected_upper_bound
-				nlb   <- global_cfg()$not_projected_lower_bound
-				nub   <- global_cfg()$not_projected_upper_bound
+				# Copy tmp_cfg if different
+				tmp_cfg <- cfg_dir_path()
+				if (!is.null(tmp_cfg) && dir.exists(tmp_cfg) && fs::path_expand(tmp_cfg) != config_dir) {
+				  message("🔔 [5] Copy tmp_cfg → staging")
+				  fs::dir_copy(fs::path_expand(tmp_cfg), config_dir, overwrite = TRUE)
+				}
+				cfg_dir_path(NULL)
 
+				# Write JSON
+				message("🔔 [6] writeBoundaryConditionsStatic()")
+				g       <- global_cfg()
+				bc_json <- fs::path_expand(file.path(config_dir, "boundary_conditions.json"))
+				fs::dir_create(dirname(bc_json), recurse = TRUE)
 				writeBoundaryConditionsStatic(
-					volume                     = vol,
-					cell_density               = dens,
-					output_json                = bc_json,
-					projected_lower_bound      = plb,
-					projected_upper_bound      = pub,
-					not_projected_lower_bound  = nlb,
-					not_projected_upper_bound  = nub
+				  volume                     = g$volume,
+				  cell_density               = g$cell_density,
+				  output_json                = bc_json,
+				  projected_lower_bound      = g$projected_lower_bound,
+				  projected_upper_bound      = g$projected_upper_bound,
+				  not_projected_lower_bound  = g$not_projected_lower_bound,
+				  not_projected_upper_bound  = g$not_projected_upper_bound
 				)
 
-				  epimodFBAfunctions::build_hypernodeGUI(
-				    hypernode_name           = hypernode_name(),
-				    config_yaml              = out_paths$yaml,
-				    boundary_conditions_file = bc_json,
-				    initial_data             = file.path(config_dir, "initial_data.csv"),
-				    mat_dir                  = config_dir,
-				    base_dir                 = working_dir(),
-				    overwrite                = TRUE
-				  )
+				# 6) build_hypernodeGUI su tmp_name
+				message("🔔 [7] Calling build_hypernodeGUI(tmp_name)")
+				epimodFBAfunctions::build_hypernodeGUI(
+				  hypernode_name           = tmp_name,
+				  config_yaml              = out_paths$yaml,
+				  boundary_conditions_file = bc_json,
+				  initial_data             = out_paths$initial_data,
+				  mat_dir                  = config_dir,
+				  base_dir                 = wd,
+				  overwrite                = TRUE
+				)
+				message("   • build_hypernodeGUI(tmp_name) done")
 
-				# • 5) determine the true hypernode root
-				cand1 <- file.path(working_dir(),          hypernode_name())
-				cand2 <- file.path(working_dir(), "hypernodes", hypernode_name())
-				hyper_base <- if (dir.exists(cand2)) cand2 else cand1
+				# 7) Sposta la cartella generata in nested_dir
+				hyper_tmp            <- file.path(wd, "hypernodes", tmp_name)
+				hyper_target_parent  <- file.path(wd, "hypernodes", hn)
+				hyper_target         <- file.path(hyper_target_parent, cfg)
+				message(sprintf("🔔 [8] Moving '%s' → '%s'", hyper_tmp, hyper_target))
 
-				# • 6) locate files
+				fs::dir_create(hyper_target_parent, recurse = TRUE)
+				fs::file_move(hyper_tmp, hyper_target)  
+				
+
+
+				# 8) Ora hyper_base è la directory annidata
+				hyper_base <- hyper_target
+				message("   • hyper_base =", hyper_base)
+
+				# 9) Run FBA model generation
+				message("🔔 [9] Running model_generation_GUI()")
 				petri_net_dir <- file.path(hyper_base, "petri_net")
 				src_dir       <- file.path(hyper_base, "src")
 				biounits_dir  <- file.path(hyper_base, "biounits")
 				gen_dir       <- file.path(hyper_base, "gen")
 
-				# • 7) run FBA model generation
-				net_file   <- list.files(petri_net_dir, pattern = "\\.PNPRO$", full.names = TRUE)
-				trans_file <- list.files(src_dir,       pattern = "\\.cpp$",   full.names = TRUE)[1]
-				fba_files  <- list.files(biounits_dir,  pattern = "\\.txt$",   full.names = TRUE, recursive = TRUE)
+				net_file   <- list.files(petri_net_dir, "\\.PNPRO$", full.names = TRUE)
+				trans_file <- list.files(src_dir,       "\\.cpp$",   full.names = TRUE)[1]
+				fba_files  <- list.files(biounits_dir,  "\\.txt$",   full.names = TRUE, recursive = TRUE)
+				message(sprintf("   • net_file: %s", net_file))
+				message(sprintf("   • trans_file: %s", trans_file))
+				message(sprintf("   • fba_files count: %d", length(fba_files)))
 
-
-				  epimodFBAfunctions::model_generation_GUI(
-				    net_fname         = net_file,
-				    transitions_fname = trans_file,
-				    fba_fname         = fba_files,
-				    output_dir        = gen_dir
-				  )
-
-
-				# • 8) cleanup config folder if desired
-				if (fs::dir_exists(config_dir)) fs::dir_delete(config_dir)
-
-				# 9) SUCCESS: remove spinner and show final modal
-				removeModal()
-				showModal(
-					modalDialog(
-						title   = "🎉 Model Generated!",
-						tagList(
-							# Immagine di successo centrata
-							div(style = "text-align:center;",
-								  img(src    = "success.png",
-								      height = "400px",
-								      alt    = "Success")
-							),
-							br(),
-							# Messaggio principale
-							div("Hypernode generated successfully!", 
-								  style="text-align:center; font-weight:bold; font-size:1.1em;"),
-							br(),
-							# Dettagli sul percorso
-							HTML(paste0(
-								"<div style='text-align:center; margin-top:10px;'>",
-								  "<p>The hypernode has been created at:<br>",
-								     "<code>", hyper_base, "</code></p>",
-								  "<p>FBA models are in:<br>",
-								     "<code>", gen_dir, "</code></p>",
-								"</div>"
-							))
-						),
-						easyClose = FALSE,
-						footer    = modalButton("Close"),
-						size      = "l"
-					)
+				epimodFBAfunctions::model_generation_GUI(
+				  net_fname         = net_file,
+				  transitions_fname = trans_file,
+				  fba_fname         = fba_files,
+				  output_dir        = gen_dir
 				)
-				reset_state()
+				message("   • model_generation_GUI() completed")
 
-				# 10) reset module back to step 1
-				hypernode_name(NULL)
-				working_dir(NULL)
-				matfile_dir(NULL)
-				unit_cfgs(list())
-				meta_cache(list())
-				current(1)
+				message("🔔 [10] Snapshot completo in .base alla radice del hypernode")
+
+				# hyper_base = .../hypernodes/<hn>/<cfg>
+				hyper_root <- dirname(hyper_base)              # .../hypernodes/<hn>
+				hidden_base <- file.path(hyper_root, ".base")  # .../hypernodes/<hn>/.base
+
+				# 1) se esiste già, cancellalo e ricrealo
+				if (dir.exists(hidden_base)) fs::dir_delete(hidden_base)
+				fs::dir_create(hidden_base)
+
+				# 2) copia QUI la cartella cfg_01 dentro .base
+				fs::dir_copy(hyper_base, hidden_base, overwrite = TRUE)
+				message("  • copiato ", hyper_base, " → ", hidden_base)
+
+				# 3) rinomina in .base tutti i file che contengono _<conf_name>  in _base
+				cfg <- conf_name()  # "cfg_01"
+				all_files <- list.files(hidden_base, recursive = TRUE, full.names = TRUE)
+				for (f in all_files) {
+					dn       <- dirname(f)
+					old_name <- basename(f)
+					new_name <- gsub(paste0("_", cfg), "_base", old_name, fixed = TRUE)
+					if (new_name != old_name) {
+						file.rename(f, file.path(dn, new_name))
+						message("    • rinominato: ", old_name, " → ", new_name)
+					}
+				}
+
+				# 4) adesso puoi continuare col cleanup staging …
+				if (dir.exists(config_dir)) {
+					fs::dir_delete(config_dir)
+					message("🔔 [11] staging config_dir rimosso")
+				}
+
+				# 11) SUCCESS
+				message("🔔 [11] SUCCESS, showing final modal")
+				removeModal()
+				showModal(modalDialog(
+				  title = "🎉 Model Generated!",
+				  tagList(
+				    div(style="text-align:center;", img(src="success.png", height="400px")),
+				    br(),
+				    div("Hypernode generated successfully!",
+				        style="text-align:center; font-weight:bold;"),
+				    br(),
+				    HTML(sprintf(
+				      "<div style='text-align:center;'>
+				         <p>Hypernode at:<br><code>%s</code></p>
+				         <p>FBA models in:<br><code>%s</code></p>
+				       </div>",
+				      hyper_base, gen_dir
+				    ))
+				  ),
+				  easyClose = FALSE,
+				  footer    = modalButton("Close"),
+				  size      = "l"
+				))
 
 			}, error = function(err) {
-				# ERROR: remove spinner and show error modal with image
+				message("🔔 [ERROR] in confirm_confname: ", err$message)
 				removeModal()
-				showModal(
-				  modalDialog(
-				    title = "❌ Error Generating Hypernode",
-				    tagList(
-				      div(style="text-align:center;",
-				          img(src="error.png", height="400px", alt="Error")
-				      ),
-				      br(),
-				      div(paste("An error occurred:", err$message),
-				          style="text-align:center; color:red;")
-				    ),
-				    easyClose = TRUE,
-				    footer = modalButton("Close"),
-				    size      = "l"
-				  )
-				)
-				reset_state()
+				showModal(modalDialog(
+				  title = "❌ Error Generating Hypernode",
+				  div(style="text-align:center; color:red;", err$message),
+				  easyClose = TRUE,
+				  footer    = modalButton("Close"),
+				  size      = "l"
+				))
 			})
 
 		}, ignoreInit = TRUE)
 
 
-			
 		observe({
 			n <- length(unit_cfgs())
 			lapply(seq_len(n), function(i) {
@@ -1363,7 +1395,7 @@ observe({
 		reset_state <- function() {
 
 			## 0) chiudo qualunque modal residuo
-			close_all_modals(); removeModal()      # fallback per l’ultimo aperto
+		#	close_all_modals(); removeModal()      # fallback per l’ultimo aperto
 
 			## 1) pulizia cartella config/
 			cfg <- cfg_dir_path()

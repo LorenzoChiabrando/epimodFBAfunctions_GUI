@@ -88,10 +88,7 @@ homeServer <- function(id){
     tutorial_html <- list(
 
       go_mg = tutorialModelGen(),
-      go_sim = div(
-        h3("Simulation – quick start"),
-        p("Coming soon …")
-      ),
+      go_sim = tutorialSimAnalysis(),
       go_dv = div(
         h3("Data Visualization"),
         p("Coming soon …")
@@ -314,4 +311,212 @@ tutorialModelGen <- function(){
   )
 }
 
+
+tutorialSimAnalysis <- function(){
+		div(
+			h2("Model Analysis – Quick Tutorial", class = "mb-4"),
+
+			tags$ol(class = "list-group list-group-numbered",
+
+				tags$li(class = "list-group-item",
+				  strong("Step 1: Hypernode Directory Selection"), br(),
+				  "Open the ", em("Model Analysis"), " tab and select the directory associated with the previously generated ",
+				  code("hypernode"), " to commence the simulation analysis."
+				),
+
+				tags$li(class = "list-group-item",
+				  tags$img(
+				    src = "home-css/tutorial-images/analysis/tutorial_analysis_1.png",
+				    class = "tutorial-image"
+				  ),
+				),
+				
+				tags$li(class = "list-group-item",
+				  tags$img(
+				    src = "home-css/tutorial-images/analysis/tutorial_analysis_2.png",
+				    class = "tutorial-image"
+				  ),
+				  p("Image showing the selection of a specific hypernode previously generated from the Model Generation tab.”")
+				),
+
+				# Step 2: Working Environment Selection
+				tags$li(class = "list-group-item",
+					strong("Step 2: Working Environment Selection"), br(),
+					"Within the ", em("Model Analysis"), " tab you may choose from multiple working environments, each of which preserves its state across future modifications. You can either:",
+					tags$ul(
+						tags$li("Select an existing environment to continue analysis using its current configuration."),
+						tags$li("Create a new environment by specifying a unique name; this will initialize a fresh workspace with the model’s base settings.")
+					)
+				),
+
+				# Image: selecting an existing environment
+				tags$li(class = "list-group-item",
+					tags$img(
+						src = "home-css/tutorial-images/analysis/tutorial_analysis_3.png",
+						class = "tutorial-image"
+					),
+					p("Interface displaying the selection of an existing working environment for the chosen hypernode.")
+				),
+
+				# Image: creating a new environment
+				tags$li(class = "list-group-item",
+					tags$img(
+						src = "home-css/tutorial-images/analysis/tutorial_analysis_4.png",
+						class = "tutorial-image"
+					),
+					p("Dialog for creating a new working environment: enter a name to initialize with default model settings.")
+				),
+				# Step 3: Workspace Overview
+				tags$li(class = "list-group-item",
+					strong("Step 3: Workspace Overview"), br(),
+					"Once the working environment is loaded, the recap section appears, displaying the environment name, a red reset button to return to environment selection, and two action buttons:",
+					tags$ul(
+						tags$li(code("Save Configuration"), 
+								    "– export the current parameter set for reuse in other environments (e.g. saving a high-glucose diet profile)."),
+						tags$li(code("Load Configuration"), 
+								    "– import a previously saved parameter set into the current environment.")
+					)
+				),
+
+				# Image: recap section with Save/Load controls
+				tags$li(class = "list-group-item",
+					tags$img(
+						src = "home-css/tutorial-images/analysis/tutorial_analysis_5.png",
+						class = "tutorial-image"
+					),
+					p("Recap panel showing the working environment name, red Reset button, and Save/Load configuration buttons.")
+				),
+
+				# Image: Load Configuration dialog
+				tags$li(class = "list-group-item",
+					tags$img(
+						src = "home-css/tutorial-images/analysis/tutorial_analysis_13.png",
+						class = "tutorial-image"
+					),
+					tags$img(
+						src = "home-css/tutorial-images/analysis/tutorial_analysis_14.png",
+						class = "tutorial-image"
+					),
+					p("Dialog for selecting and loading a saved configuration into the active working environment.")
+				),
+
+				# Step 4: Model Configuration Section
+				tags$li(class = "list-group-item",
+					strong("Step 4: Model Configuration Section"), br(),
+					"In this section, you may reconfigure the parameters originally defined during model generation. ",
+					"Please note that modifying any of ", code("bioMin"), ", ", code("bioMean"), ", or ", code("bioMax"),
+					" will necessitate model regeneration to apply these changes."
+				),
+
+				# Image 1: overview of the Model Configuration section
+				tags$li(class = "list-group-item",
+					tags$img(
+						src = "home-css/tutorial-images/analysis/tutorial_analysis_6.png",
+						class = "tutorial-image"
+					),
+					p("Overview of the Model Configuration section, where all models loaded for this hypernode are listed.")
+				),
+
+				# Image 2: internal dialog – Parameters panel
+				tags$li(class = "list-group-item",
+					tags$img(
+						src = "home-css/tutorial-images/analysis/tutorial_analysis_7.png",
+						class = "tutorial-image"
+					),
+					p("Internal dialog – Parameters panel: adjust ", code("bioMin"), ", ", code("bioMean"), " and ", code("bioMax"), ".")
+				),
+
+				# Image 3: reaction bounds modification panel
+				tags$li(class = "list-group-item",
+					tags$img(
+						src = "home-css/tutorial-images/analysis/tutorial_analysis_8.png",
+						class = "tutorial-image"
+					),
+					p("Panel for configuring reaction bounds, applicable to both projected and non-projected reactions.")
+				),
+
+				# Image 4: warning on parameter modification
+				tags$li(class = "list-group-item",
+					tags$img(
+						src = "home-css/tutorial-images/analysis/tutorial_analysis_12.png",
+						class = "tutorial-image"
+					),
+					p("Warning displayed when attempting to run the analysis after modifying biomass parameters, indicating that model regeneration is required.")
+				),
+				# Step 5: Simulation Parameters and Boundary Metabolite Configuration
+				tags$li(class = "list-group-item",
+					strong("Step 5: Simulation Parameters Configuration"), br(),
+					"In this section, define global simulation parameters such as time steps, solver settings, and integration options. ",
+					"Any changes made here will automatically propagate to the individual model panels, updating the ", code("_r projected"), " reaction bounds accordingly."
+				),
+
+				# Image 1: Simulation parameters panel
+				tags$li(class = "list-group-item",
+					tags$img(
+						src = "home-css/tutorial-images/analysis/tutorial_analysis_9.png",
+						class = "tutorial-image"
+					),
+					p("Panel for configuring global simulation settings, including time resolution, solver tolerance, and integration method.")
+				),
+
+				tags$li(class = "list-group-item",
+					strong("Boundary Metabolite Concentration Configuration"), br(),
+					"Specify default concentrations for boundary metabolites used in the simulation. ",
+					"Modifying these values will also update the corresponding ", code("_r projected"), " bounds in each individual model’s settings."
+				),
+
+				# Image 2: Boundary metabolite concentration panel
+				tags$li(class = "list-group-item",
+					tags$img(
+						src = "home-css/tutorial-images/analysis/tutorial_analysis_10.png",
+						class = "tutorial-image"
+					),
+					p("Interface for setting default concentrations of boundary metabolites; changes here adjust the projected reaction bounds in all models.")
+				),
+				
+				# Step 6: System-Level Parameter Adjustment
+				tags$li(class = "list-group-item",
+					strong("Step 6: System-Level Parameter Adjustment"), br(),
+					"Here you may modify global bounds for non-specified reactions and, in particular, adjust the system ", code("volume"), " and ", code("cell density"), ". ",
+					span(strong("Warning:"), 
+							 " changing either volume or cell density will necessitate full model regeneration to incorporate these system-level updates.")
+				),
+
+				# Image 1: System parameters panel overview
+				tags$li(class = "list-group-item",
+					tags$img(
+						src = "home-css/tutorial-images/analysis/tutorial_analysis_15.png",
+						class = "tutorial-image"
+					),
+					p("Overview of the System-Level Parameters section, showing adjustable bounds for undefined reactions alongside volume and cell density controls.")
+				),
+
+				# Image 2: Volume modification with regeneration warning
+				tags$li(class = "list-group-item",
+					tags$img(
+						src = "home-css/tutorial-images/analysis/tutorial_analysis_11.png",
+						class = "tutorial-image"
+					),
+					tags$img(
+						src = "home-css/tutorial-images/analysis/tutorial_analysis_12.png",
+						class = "tutorial-image"
+					),
+					p("Dialog illustrating modification of the system volume and the prominent warning indicating that model regeneration is required.")
+				),
+				# Step 7: Running the Simulation
+				tags$li(class = "list-group-item",
+					strong("Step 7: Running the Simulation"), br(),
+					"Click the ", span(class = "badge bg-primary", "Run Simulation"), " button to execute the analysis. ",
+					"If you have modified any sensitive parameters (e.g. biomass constraints, boundary concentrations, volume, or cell density), ",
+					"you will be prompted to confirm model regeneration before the simulation can proceed."
+				),
+				# Note on post-run configuration
+				tags$li(class = "list-group-item",
+					em("Note:"), " Reopening the configuration panels after the run will display the exact parameter set used in the most recent execution."
+				)
+			)
+		)
+
+
+}
 
