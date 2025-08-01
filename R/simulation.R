@@ -68,7 +68,45 @@ simulationServer <- function(id) {
     # ──────────────────────────────────────────────────────────────────────
     node_data <- reactiveVal(list())
     
-    
+ # ────────────────────────────────────────────────────────────────────
+#  Scrivi population_parameters.csv e mu_max_values_gui.csv
+#  OGNI volta che cambiano i dati in cache (node_data()).
+#  Deve stare molto in alto, subito DOPO node_data <- reactiveVal().
+# ────────────────────────────────────────────────────────────────────
+observeEvent(node_data(), ignoreInit = TRUE, {
+  base <- get_cfg_root()
+  if (is.null(base) || !nzchar(base)) return()
+
+  cfg_dir <- file.path(base, "config")
+  nd      <- node_data()
+  if (!length(nd)) return()
+
+  ## --- population_parameters.csv  -----------------------------------
+  pop_mat <- do.call(rbind, lapply(nd, function(info)
+    c(info$params$starv,
+      info$params$dup,
+      info$params$death)
+  ))
+
+  write.table(pop_mat,
+              file      = file.path(cfg_dir, "population_parameters.csv"),
+              sep       = ",",
+              row.names = FALSE,
+              col.names = FALSE,
+              quote     = FALSE)
+
+  ## --- mu_max_values_gui.csv  ---------------------------------------
+  mu_df <- data.frame(
+    Model  = names(nd),
+    mu_max = vapply(nd, function(info) info$params$mu_max, numeric(1)),
+    stringsAsFactors = FALSE
+  )
+  write.csv(mu_df,
+            file      = file.path(cfg_dir, "mu_max_values_gui.csv"),
+            row.names = FALSE,
+            quote     = FALSE)
+})
+   
 		## ──────────────────────────────────────────────────────────────
 		##   Helpers “a colonna singola”  (solo background_conc)
 		## ──────────────────────────────────────────────────────────────
@@ -93,6 +131,36 @@ simulationServer <- function(id) {
 				stringsAsFactors = FALSE
 			)
 		}
+
+# =======================================================================
+#  Scritture ad alta precisione                                (utils)
+# =======================================================================
+
+# Esegue expr con options(digits = prec, scipen = 999) e poi ripristina
+with_prec <- function(expr, prec = 15L) {
+  op <- options(digits = prec, scipen = 999)
+  on.exit(options(op), add = TRUE)
+  force(expr)
+}
+
+write_yaml_prec <- function(x, path, prec = 15L) {
+  yaml::write_yaml(x, path, precision = prec)
+}
+
+write_json_prec <- function(x, path, prec = 15L) {
+  jsonlite::write_json(x, path,
+                       auto_unbox = TRUE, pretty = TRUE,
+                       digits = prec)
+}
+
+write_csv_prec <- function(df, path, prec = 15L, ...) {
+  with_prec(
+    write.csv(df, file = path,
+              row.names = FALSE, quote = FALSE, ...),
+    prec = prec
+  )
+}
+
 
 		## scrive il CSV partendo dal DF “single-column” ------------------------
 		## ════════════════════════════════════════════════════════════════════════════
@@ -142,7 +210,7 @@ simulationServer <- function(id) {
 			}
 
 			## 5) Scrivi il CSV definitivo ─────────────────────────────────────────────
-			write.csv(long, csv_path, row.names = FALSE, quote = FALSE)
+			write_csv_prec(long, csv_path)
 		}
 
 		get_cfg_root <- function() {
@@ -198,11 +266,10 @@ simulationServer <- function(id) {
 			)
 
 			# salva JSON + YAML
-			jsonlite::write_json(snap,
-				file.path(default_dir, "default_values.json"),
-				auto_unbox = TRUE, pretty = TRUE
+			write_json_prec(snap,
+				file.path(default_dir, "default_values.json")
 			)
-			yaml::write_yaml(snap,
+			write_yaml_prec(snap,
 				file.path(default_dir, "default_values.yaml")
 			)
 			message("[save_default_conf] snapshot in .default_conf aggiornata")
@@ -213,10 +280,10 @@ simulationServer <- function(id) {
 		# ─────────────────────────────────────────────────────────────────────────────
 		load_default_conf <- function(base_dir) {
 			default_dir <- file.path(base_dir, ".default_conf")
-			if (!dir.exists(default_dir)) return()  # niente da fare
+			if (!dir.exists(default_dir)) return()
 
 			# 1) copia indietro i CSV GUI-temp
-			for(slot in c("proj","nproj")) {
+			for (slot in c("proj","nproj")) {
 				src <- file.path(default_dir, basename(session_files[[slot]]))
 				dst <- session_files[[slot]]
 				if (file.exists(src)) file.copy(src, dst, overwrite = TRUE)
@@ -237,13 +304,16 @@ simulationServer <- function(id) {
 			names(nd) <- models()
 			node_data(nd)
 
-			# 3) ricarica i numericInputs dal JSON
-			def <- jsonlite::fromJSON(file.path(default_dir, "default_values.json"))
+			# 3) ricarica i numericInputs + ***PARAMETRI MODELLO*** dal JSON
+			def <- jsonlite::fromJSON(file.path(default_dir, "default_values.json"),
+				                        simplifyVector = FALSE)
+
 			updateNumericInput(session, "i_time", value = def$times$initial_time)
 			updateNumericInput(session, "f_time", value = def$times$final_time)
 			updateNumericInput(session, "s_time", value = def$times$step_size)
 			updateNumericInput(session, "atol",   value = def$tolerances$atol)
 			updateNumericInput(session, "rtol",   value = def$tolerances$rtol)
+
 			for(id in names(def$boundary_concentrations)) {
 				updateNumericInput(
 				  session,
@@ -251,15 +321,30 @@ simulationServer <- function(id) {
 				  value = def$boundary_concentrations[[id]]
 				)
 			}
-			sp <- def$system_parameters
-			updateNumericInput(session, "fba_ub",       value = sp$projected_upper_bound)
-			updateNumericInput(session, "fba_lb",       value = sp$projected_lower_bound)
-			updateNumericInput(session, "background_met",value = sp$background_met)
-			updateNumericInput(session, "background_met_lb",value = sp$background_met_lb)
-			updateNumericInput(session, "sys_volume",   value = sp$volume)
-			updateNumericInput(session, "cell_density", value = sp$cell_density)
 
-			message("[load_default_conf] valori caricati da .default_conf")
+			sp <- def$system_parameters
+			updateNumericInput(session, "fba_ub",          value = sp$projected_upper_bound)
+			updateNumericInput(session, "fba_lb",          value = sp$projected_lower_bound)
+			updateNumericInput(session, "background_met",  value = sp$background_met)
+			updateNumericInput(session, "background_met_lb", value = sp$background_met_lb)
+			updateNumericInput(session, "sys_volume",      value = sp$volume)
+			updateNumericInput(session, "cell_density",    value = sp$cell_density)
+
+			## ⬇️ ***NUOVO: applica i parametri per-modello dallo snapshot JSON***
+			if (!is.null(def$models)) {
+				nd <- node_data()
+				for (mdl in names(def$models)) {
+				  if (mdl %in% names(nd)) {
+				    m <- def$models[[mdl]]
+				    nd[[mdl]]$params          <- m$params
+				    nd[[mdl]]$population      <- m$population
+				    nd[[mdl]]$initial_biomass <- m$initial_biomass
+				  }
+				}
+				node_data(nd)  # trigger reattivi → i modal leggeranno i valori aggiornati
+			}
+
+			message("[load_default_conf] valori caricati da .default_conf (inclusi parametri modello)")
 		}
 
 
@@ -1021,13 +1106,17 @@ observeEvent(input$confirm_cfg, ignoreInit = TRUE, {
 		
 		# 1) Utility: patch JSON, optionally regenerate model, then run analysis
 		run_simulation <- function(regenerate = FALSE) {
-		
+
 			regen_from_params <- pre_check_models()
 			if (regen_from_params) {
 				message("[DEBUG] FBA models out of sync with GUI parameters → forcing regeneration")
 				regenerate <- TRUE
-				showNotification("Detected parameter changes → regenerating FBA models", type="warning")
+				showNotification(
+				  "Detected parameter changes → regenerating FBA models",
+				  type = "warning"
+				)
 			}
+
 			base       <- get_cfg_root()
 			config_dir <- file.path(base, "config")
 			petri_dir  <- file.path(base, "petri_net")
@@ -1035,28 +1124,29 @@ observeEvent(input$confirm_cfg, ignoreInit = TRUE, {
 			biounits   <- file.path(base, "biounits")
 			gen_dir    <- file.path(base, "gen")
 
-			# A) Patch boundary_conditions.json
+
 			bc_path <- file.path(config_dir, "boundary_conditions.json")
 			if (file.exists(bc_path)) {
 				bc <- jsonlite::fromJSON(bc_path, simplifyVector = FALSE)
 				bc$volume       <- input$sys_volume
 				bc$cell_density <- input$cell_density
-				jsonlite::write_json(bc, bc_path, auto_unbox = TRUE, pretty = TRUE)
+				write_json_prec(bc, bc_path)                       # <— precision 15
 			}
 
-			# B) Regenerate FBA‐model if requested
+
 			if (regenerate) {
 				showModal(modalDialog(
-				  title     = NULL,
+				  title  = NULL,
 				  tagList(
-				    div(style="text-align:center;", img(src="running.png", height="400px")),
+				    div(style = "text-align:center;",
+				        img(src = "running.png", height = "400px")),
 				    br(),
-				    div("Regenerating model… please wait", style="text-align:center; font-weight:bold;")
+				    div("Regenerating model… please wait",
+				        style = "text-align:center; font-weight:bold;")
 				  ),
 				  footer    = NULL, easyClose = FALSE, size = "l"
 				))
 
-				# Patch C++ stub
 				cpp_files <- list.files(src_dir, "\\.cpp$", full.names = TRUE)
 				if (length(cpp_files)) {
 				  gui_cpp <- cpp_files[[1]]
@@ -1070,10 +1160,11 @@ observeEvent(input$confirm_cfg, ignoreInit = TRUE, {
 				  writeLines(lines, gui_cpp)
 				}
 
-				# model_generation_GUI
 				net_file   <- list.files(petri_dir, "\\.PNPRO$", full.names = TRUE)
 				trans_file <- list.files(src_dir, "\\.cpp$",   full.names = TRUE)[1]
-				fba_txts   <- list.files(biounits, "\\.txt$",  full.names = TRUE, recursive = TRUE)
+				fba_txts   <- list.files(biounits, "\\.txt$",  full.names = TRUE,
+				                         recursive = TRUE)
+
 				epimodFBAfunctions::model_generation_GUI(
 				  net_fname         = net_file,
 				  transitions_fname = trans_file,
@@ -1083,13 +1174,13 @@ observeEvent(input$confirm_cfg, ignoreInit = TRUE, {
 				removeModal()
 			}
 
-			# C) Build GUI‐snapshot YAML
 			hn_name   <- basename(dirname(base))
 			cfg_name  <- basename(base)
 			hypernode <- paste(hn_name, cfg_name, sep = "_")
 
 			orig_yml_path <- list.files(config_dir, "\\.ya?ml$", full.names = TRUE)[1]
-			gui_yml       <- if (length(orig_yml_path)) yaml::read_yaml(orig_yml_path) else list()
+			gui_yml       <- if (length(orig_yml_path))
+				                 yaml::read_yaml(orig_yml_path) else list()
 
 			gui_yml$simulation <- list(
 				initial_time       = input$i_time,
@@ -1098,6 +1189,7 @@ observeEvent(input$confirm_cfg, ignoreInit = TRUE, {
 				absolute_tolerance = input$atol,
 				relative_tolerance = input$rtol
 			)
+
 			bm_defs <- gui_yml$boundary_metabolites %||% character()
 			if (length(bm_defs)) {
 				met_ids <- gsub("[^A-Za-z0-9_]", "_", bm_defs)
@@ -1106,6 +1198,8 @@ observeEvent(input$confirm_cfg, ignoreInit = TRUE, {
 				  bm_defs
 				)
 			}
+
+			## system parameters
 			gui_yml$simulation$system_parameters <- list(
 				fba_upper_bound = input$fba_ub,
 				fba_lower_bound = input$fba_lb,
@@ -1114,28 +1208,61 @@ observeEvent(input$confirm_cfg, ignoreInit = TRUE, {
 				cell_density    = input$cell_density
 			)
 
-			gui_yaml_path <- file.path(config_dir, paste0(hypernode, "_gui.yaml"))
-			yaml::write_yaml(gui_yml, gui_yaml_path)
 
-			# D) Launch analysis
+			if (!is.null(gui_yml$cellular_units)) {
+				cu <- gui_yml$cellular_units          # lista originale
+				nd <- node_data()                     # cache corrente
+
+				for (i in seq_along(cu)) {
+					mdl <- cu[[i]]$model_name
+					if (mdl %in% names(nd)) {
+						obj <- nd[[mdl]]
+
+						cu[[i]]$initial_biomass <- obj$initial_biomass
+						cu[[i]]$initial_count   <- obj$population      # ⇦ nuovo
+
+						cu[[i]]$population$starv <- obj$params$starv   # ⇦ nuovo
+						cu[[i]]$population$dup   <- obj$params$dup     # ⇦ nuovo
+						cu[[i]]$population$death <- obj$params$death   # ⇦ nuovo
+
+						if (!is.null(obj$params$mu_max))
+						  cu[[i]]$mu_max <- obj$params$mu_max
+					}
+				}
+				gui_yml$cellular_units <- cu
+			}
+
+
+
+			gui_yaml_path <- file.path(config_dir, paste0(hypernode, "_gui.yaml"))
+			write_yaml_prec(gui_yml, gui_yaml_path)
+
+
 			showModal(modalDialog(
-				title     = NULL,
+				title  = NULL,
 				tagList(
-				  div(style="text-align:center;", img(src="running.png", height="400px")),
+				  div(style = "text-align:center;",
+				      img(src = "running.png", height = "400px")),
 				  br(),
-				  div("Running simulation and analysis…", style="text-align:center; font-weight:bold;")
+				  div("Running simulation and analysis…",
+				      style = "text-align:center; font-weight:bold;")
 				),
 				footer    = NULL, easyClose = FALSE, size = "l"
 			))
 
 			tryCatch({
+
 				debug_paths <- c(
 				  gen    = file.path(base, "gen"),
 				  config = config_dir,
 				  src    = file.path(base, "src"),
 				  output = file.path(base, "output")
 				)
-				fba_files  <- list.files(file.path(base, "biounits"), "\\.txt$", full.names = TRUE, recursive = TRUE)
+
+				fba_files  <- list.files(file.path(base, "biounits"),
+				                         "\\.txt$", full.names = TRUE,
+				                         recursive = TRUE)
+
 				user_files <- c(
 				  file.path(config_dir, "population_parameters.csv"),
 				  file.path(base, "gen",    paste0(hypernode, ".fbainfo")),
@@ -1161,38 +1288,49 @@ observeEvent(input$confirm_cfg, ignoreInit = TRUE, {
 				showModal(modalDialog(
 				  title = "✅ Simulation & Analysis Complete",
 				  tagList(
-				    div(style="text-align:center;", img(src="success.png", height="400px")),
+				    div(style = "text-align:center;",
+				        img(src = "success.png", height = "400px")),
 				    br(),
-				    div("Your model has been generated and analyzed successfully.", style="text-align:center; font-weight:bold;"),
+				    div("Your model has been generated and analyzed successfully.",
+				        style = "text-align:center; font-weight:bold;"),
 				    br(),
-				    div("What next?", style="text-align:center;")
+				    div("What next?", style = "text-align:center;")
 				  ),
 				  footer = tagList(
-				    actionButton(ns("btn_visualize"), "Visualize Results", class="btn-primary"),
-				    actionButton(ns("btn_new_sim"),   "New Simulation",   class="btn-secondary")
+				    actionButton(ns("btn_visualize"), "Visualize Results",
+				                 class = "btn-primary"),
+				    actionButton(ns("btn_new_sim"),   "New Simulation",
+				                 class = "btn-secondary")
 				  ),
 				  easyClose = FALSE, size = "l"
 				))
 				session$userData$last_hypernode <- base
 
 			}, error = function(err) {
+
 				removeModal()
 				showModal(modalDialog(
 				  title = "❌ Simulation Error",
 				  tagList(
-				    div(style="text-align:center;", img(src="error.png", height="400px")),
+				    div(style = "text-align:center;",
+				        img(src = "error.png", height = "400px")),
 				    br(),
-				    div(paste("An error occurred:", err$message), style="text-align:center; color:red; font-weight:bold;")
+				    div(paste("An error occurred:", err$message),
+				        style = "text-align:center; color:red; font-weight:bold;")
 				  ),
 				  easyClose = TRUE, footer = modalButton("Close"), size = "l"
 				))
+
 			}, finally = {
+
 				save_default_conf(base)
 				unlink(c(session_files$proj, session_files$nproj), force = TRUE)
 				unlink(gui_yaml_path, force = TRUE)
-				unlink(list.files(src_dir, "*_gui\\.(R|cpp)$", full.names = TRUE), force = TRUE)
+				unlink(list.files(src_dir, "*_gui\\.(R|cpp)$", full.names = TRUE),
+				       force = TRUE)
 			})
 		}
+
 
 		# 2) Run button → if sys-params changed ask; otherwise run directly
 observeEvent(input$btn_run_sim, {
@@ -1356,60 +1494,70 @@ observeEvent(input$confirm_regen, ignoreInit = TRUE, {
 
 
 				    ## edit parameters
-						## ── Edit Parameters & Trigger FBA Regeneration ──────────────────────────────
-						observeEvent(input[[paste0(param_id, "_cell_edit")]], ignoreInit = TRUE, {
-							edit    <- input[[paste0(param_id, "_cell_edit")]]
-							row     <- edit$row
-							new_val <- suppressWarnings(as.numeric(edit$value))
-							if (is.na(new_val)) {
-								showNotification("Value must be numeric", type = "error")
-								return()
-							}
+observeEvent(input[[paste0(param_id, "_cell_edit")]], ignoreInit = TRUE, {
+  edit    <- input[[paste0(param_id, "_cell_edit")]]
+  row     <- edit$row
+  new_val <- suppressWarnings(as.numeric(edit$value))
+  if (is.na(new_val)) {
+    showNotification("Value must be numeric", type = "error")
+    return()
+  }
 
-							isolate({
-								# 1) Update in-memory cache
-								nd    <- node_data()
-								info1 <- nd[[mdl2]]
-								fields <- names(info1$params)
-								name   <- fields[row]
-								info1$params[[name]] <- new_val
-								nd[[mdl2]] <- info1
-								node_data(nd)
-							})
+  isolate({
+    nd    <- node_data()
+    info1 <- nd[[mdl2]]
 
-							# 2) Overwrite lines 5–7 in the corresponding *_model.txt under biounits/<model>/
-							base      <- get_cfg_root()
-							biounit_d <- file.path(base, "biounits", mdl2)
-							txt_file  <- list.files(biounit_d, "_model\\.txt$", full.names = TRUE)[1]
-							if (length(txt_file) == 1 && file.exists(txt_file)) {
-								lines <- readLines(txt_file)
-								# assume lines[5]=bioMax, [6]=bioMean, [7]=bioMin
-								lines[5] <- as.character(info1$params$bioMax)
-								lines[6] <- as.character(info1$params$bioMean)
-								lines[7] <- as.character(info1$params$bioMin)
-								writeLines(lines, txt_file)
-								message("[DEBUG] Patched ", basename(txt_file), " (bioMax/bioMean/bioMin)")
-							}
+    # elenco dei parametri mostrati nella tabella
+    param_names <- c(names(info1$params), "initial_count")
+    par_name    <- param_names[row]
 
-							# 3) Flag that FBA regeneration is required
-							need_regenerate(TRUE)
-						#	showNotification("Model parameters changed → FBA model regeneration required", type = "warning")
+    if (par_name == "initial_count") {
+      info1$population <- new_val                     # ✱ solo cache
+    } else {
+      info1$params[[par_name]] <- new_val             # ✱ aggiorna params
+    }
 
-							# 4) Update the DataTable in the modal
-							scalar_num <- function(x) {
-								out <- suppressWarnings(as.numeric(x[1]))
-								if (length(out)==0 || is.na(out)) NA_real_ else out
-							}
-							upd <- node_data()[[mdl2]]
-							vals2 <- vapply(upd$params, scalar_num, numeric(1))
-							df2 <- data.frame(
-								Parameter = c(names(upd$params), "initial_count"),
-								Value     = c(vals2, upd$population),
-								check.names = FALSE,
-								stringsAsFactors = FALSE
-							)
-							DT::replaceData(param_proxy, df2, resetPaging = FALSE, rownames = FALSE)
-						})
+    nd[[mdl2]] <- info1
+    node_data(nd)
+  })
+
+  ## ───────────────────────────────────────────────
+  ## patch *_model.txt  (solo bioMax/bioMean/bioMin)
+  ## ───────────────────────────────────────────────
+  if (par_name %in% c("bioMax", "bioMean", "bioMin")) {
+    base      <- get_cfg_root()
+    biounit_d <- file.path(base, "biounits", mdl2)
+    txt_file  <- list.files(biounit_d, "_model\\.txt$", full.names = TRUE)[1]
+    if (length(txt_file) == 1 && file.exists(txt_file)) {
+      lines <- readLines(txt_file)
+      nd    <- node_data(); info <- nd[[mdl2]]
+      lines[5] <- info$params$bioMax
+      lines[6] <- info$params$bioMean
+      lines[7] <- info$params$bioMin
+      writeLines(lines, txt_file)
+      message("[DEBUG] Patched ", basename(txt_file), " (bioMax/bioMean/bioMin)")
+    }
+    need_regenerate(TRUE)          # ⇦ solo se tocco quei tre
+  }
+
+  ## ───────────────────────────────────────────────
+  ## refresh tabella nel modal
+  ## ───────────────────────────────────────────────
+  scalar_num <- function(x) {
+    out <- suppressWarnings(as.numeric(x[1]))
+    if (length(out)==0 || is.na(out)) NA_real_ else out
+  }
+  upd   <- node_data()[[mdl2]]
+  vals2 <- vapply(upd$params, scalar_num, numeric(1))
+  df2   <- data.frame(
+    Parameter = c(names(upd$params), "initial_count"),
+    Value     = c(vals2, upd$population),
+    check.names     = FALSE,
+    stringsAsFactors = FALSE
+  )
+  DT::replaceData(param_proxy, df2, resetPaging = FALSE, rownames = FALSE)
+})
+
 
 						## ───────── DT: bounds  ─────────
 						opts <- list(dom = "ft",
@@ -1660,10 +1808,8 @@ observeEvent(input$confirm_regen, ignoreInit = TRUE, {
 			})
 
 			## 7) Scrivi JSON + YAML dentro save_dir
-			jsonlite::write_json(cfg,
-				                   file.path(save_dir, "config_values.json"),
-				                   auto_unbox = TRUE, pretty = TRUE)
-			yaml::write_yaml(cfg,
+		  write_json_prec(cfg, file.path(save_dir, "config_values.json"))
+			write_yaml_prec(cfg,
 				               file.path(save_dir, paste0("config_", cfg_name, ".yaml")))
 
 			removeModal()
